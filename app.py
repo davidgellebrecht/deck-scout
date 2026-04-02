@@ -1,0 +1,1184 @@
+#!/usr/bin/env python3
+"""
+app.py — Deck Scout Web Portal
+West Coast Deck edition — no sidebar, city dropdown, modern professional aesthetic.
+
+Run locally:   streamlit run app.py
+Deploy:        push to GitHub → share.streamlit.io
+"""
+
+import json
+import os
+import time
+from datetime import datetime
+
+import folium
+import pandas as pd
+import streamlit as st
+from streamlit_folium import st_folium
+
+import config
+from scout import (
+    fetch_residential_properties,
+    fetch_commercial_properties,
+    filter_properties,
+    print_banner,
+)
+from rank import (
+    ALL_LAYERS,
+    ALL_SIGNAL_KEYS,
+    SIGNAL_LABELS,
+    run_all_layers,
+    signals_fired_list,
+)
+
+# ── Demo mode ────────────────────────────────────────────────────────────────
+DEMO_MODE = True
+
+# ── Page config ──────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Deck Scout — West Coast Deck",
+    page_icon="🏠",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ── Load Streamlit secrets ───────────────────────────────────────────────────
+try:
+    config.RAPIDAPI_KEY = st.secrets.get("RAPIDAPI_KEY", config.RAPIDAPI_KEY)
+except Exception:
+    pass
+
+# ── West Coast Deck CSS ──────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+/* ── Hide Streamlit chrome ── */
+#MainMenu, footer, header            { visibility: hidden; }
+.stDeployButton                      { display: none !important; }
+section[data-testid="stSidebar"]     { display: none !important; }
+[data-testid="collapsedControl"]     { display: none !important; }
+
+/* ── Page background ── */
+.stApp {
+    background-color: #F5F5F0;
+}
+.main .block-container {
+    padding: 3rem 5rem 4rem 5rem;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+/* ── Global typography ── */
+html, body, [class*="css"] {
+    font-family: 'Poppins', sans-serif;
+    color: #1B2A4A;
+}
+
+/* ── Headings ── */
+h1 {
+    font-family: 'Poppins', sans-serif !important;
+    font-weight: 700 !important;
+    font-size: 2.8rem !important;
+    letter-spacing: -0.02em !important;
+    color: #1B2A4A !important;
+    line-height: 1.1 !important;
+    margin-bottom: 0.2rem !important;
+}
+h2, h3 {
+    font-family: 'Poppins', sans-serif !important;
+    font-weight: 600 !important;
+    color: #1B2A4A !important;
+    letter-spacing: -0.01em !important;
+}
+
+/* ── Section labels ── */
+.wcd-label {
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #C0833E;
+    margin-bottom: 0.15rem;
+    margin-top: 0.2rem;
+    display: block;
+    border-bottom: 2px solid #C0833E;
+    padding-bottom: 0.3rem;
+}
+
+/* ── Divider ── */
+hr {
+    border: none !important;
+    border-top: 1px solid #D6D0C4 !important;
+    margin: 2rem 0 !important;
+}
+
+/* ── Selectbox ── */
+.stSelectbox > div > div {
+    background-color: #FFFFFF !important;
+    border: 1px solid #D6D0C4 !important;
+    border-radius: 4px !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.85rem !important;
+    color: #1B2A4A !important;
+}
+
+/* ── Checkboxes ── */
+.stCheckbox > label,
+.stCheckbox > label > div,
+.stCheckbox > label > span,
+.stCheckbox span[data-testid="stMarkdownContainer"] p {
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    color: #1B2A4A !important;
+    letter-spacing: 0.01em !important;
+    opacity: 1 !important;
+}
+
+/* ── Captions ── */
+.stCaption,
+[data-testid="stCaptionContainer"] p,
+[data-testid="stCaptionContainer"] {
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.72rem !important;
+    color: #5A6B7D !important;
+    line-height: 1.55 !important;
+    opacity: 1 !important;
+}
+
+/* ── Expander header ── */
+[data-testid="stExpander"] summary p {
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.78rem !important;
+    font-weight: 500 !important;
+    color: #1B2A4A !important;
+    line-height: 1.4 !important;
+    opacity: 1 !important;
+}
+[data-testid="stExpander"] summary svg {
+    color: #C0833E !important;
+    fill: #C0833E !important;
+}
+
+/* ── Expander body ── */
+[data-testid="stExpander"] details > div,
+[data-testid="stExpander"] .streamlit-expanderContent {
+    background-color: #FAFAF7 !important;
+    border: 1px solid #D6D0C4 !important;
+    padding: 1rem !important;
+}
+[data-testid="stExpander"] details > div p,
+[data-testid="stExpander"] details > div span,
+[data-testid="stExpander"] details > div li,
+[data-testid="stExpander"] details > div strong,
+[data-testid="stExpander"] details > div a,
+[data-testid="stExpander"] .streamlit-expanderContent p,
+[data-testid="stExpander"] .streamlit-expanderContent span,
+[data-testid="stExpander"] .streamlit-expanderContent strong {
+    color: #1B2A4A !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.78rem !important;
+    opacity: 1 !important;
+}
+
+/* ── Primary button (Run Scan) ── */
+.stButton > button[kind="primary"] {
+    width: 100% !important;
+    background-color: #C0833E !important;
+    color: #FFFFFF !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.18em !important;
+    text-transform: uppercase !important;
+    border: none !important;
+    border-radius: 4px !important;
+    padding: 1rem 2rem !important;
+    margin-top: 0.5rem !important;
+    transition: background-color 0.2s !important;
+}
+.stButton > button[kind="primary"]:hover {
+    background-color: #A06E2E !important;
+}
+
+/* ── Secondary buttons ── */
+.stButton > button[kind="secondary"] {
+    background-color: #1B2A4A !important;
+    color: #FFFFFF !important;
+    border: 1px solid #C0833E !important;
+    border-radius: 4px !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.65rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    padding: 0.7rem 1rem !important;
+}
+.stButton > button[kind="secondary"]:hover {
+    background-color: #C0833E !important;
+    border-color: #C0833E !important;
+}
+
+/* ── Download buttons ── */
+.stDownloadButton > button {
+    background-color: transparent !important;
+    color: #1B2A4A !important;
+    border: 1px solid #D6D0C4 !important;
+    border-radius: 4px !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.65rem !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+}
+.stDownloadButton > button:hover {
+    border-color: #1B2A4A !important;
+    background-color: #1B2A4A !important;
+    color: #FFFFFF !important;
+}
+
+/* ── Metrics ── */
+[data-testid="metric-container"] {
+    background: #FFFFFF;
+    border: 1px solid #D6D0C4;
+    border-radius: 4px;
+    padding: 1.1rem 1.3rem;
+}
+[data-testid="metric-container"] label {
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.58rem !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    color: #C0833E !important;
+}
+[data-testid="metric-container"] [data-testid="stMetricValue"] {
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+    color: #1B2A4A !important;
+}
+
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0;
+    border-bottom: 1px solid #D6D0C4;
+    background: transparent;
+}
+.stTabs [data-baseweb="tab"] {
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.62rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    padding: 0.8rem 1.6rem !important;
+    background: transparent !important;
+    border: none !important;
+    color: #C0833E !important;
+}
+.stTabs [aria-selected="true"] {
+    background: transparent !important;
+    border-bottom: 2px solid #1B2A4A !important;
+    color: #1B2A4A !important;
+}
+
+/* ── Info / status box ── */
+.stInfo {
+    background-color: #ECEAE4 !important;
+    border: 1px solid #D6D0C4 !important;
+    border-radius: 4px !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.8rem !important;
+    color: #1B2A4A !important;
+}
+
+/* ── Success boxes ── */
+[data-testid="stAlert"][data-baseweb="notification"]:has(svg[data-testid="stAlertDynamicIcon-success"]),
+.stSuccess, [data-testid="stAlert"].stSuccess {
+    background-color: #E8F5E9 !important;
+    border: 1.5px solid #2E7D32 !important;
+    border-radius: 4px !important;
+    opacity: 1 !important;
+}
+.stSuccess p, .stSuccess div, .stSuccess span {
+    color: #1B5E20 !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.75rem !important;
+    opacity: 1 !important;
+}
+
+/* ── Warning box ── */
+.stWarning, [data-testid="stAlert"].stWarning,
+[data-testid="stAlert"]:has([data-testid="stAlertDynamicIcon-warning"]) {
+    background-color: #FFF9E6 !important;
+    border: 1px solid #C0833E !important;
+    border-radius: 4px !important;
+    opacity: 1 !important;
+}
+.stWarning p, .stWarning li, .stWarning strong,
+.stWarning span, .stWarning code, .stWarning div {
+    color: #1B2A4A !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.78rem !important;
+    opacity: 1 !important;
+}
+
+/* ── Demo button ── */
+[data-testid="column"]:has(.demo-marker) button {
+    background-color: #B71C1C !important;
+    color: #FFFFFF !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.62rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    border: none !important;
+    border-radius: 4px !important;
+    width: 100% !important;
+    padding: 0.9rem 1rem !important;
+    animation: demo-pulse 2.5s ease-in-out infinite;
+}
+[data-testid="column"]:has(.demo-marker) button:hover {
+    background-color: #7F0000 !important;
+}
+@keyframes demo-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(183,28,28,0.5); }
+    50%       { box-shadow: 0 0 0 6px rgba(183,28,28,0); }
+}
+
+/* ── Hero image strip ── */
+[data-testid="stImage"] img {
+    object-fit: cover;
+    height: 200px;
+    width: 100%;
+    display: block;
+    border-radius: 4px;
+}
+[data-testid="stImage"] {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* ── Dataframe ── */
+.stDataFrame { border: 1px solid #D6D0C4 !important; border-radius: 4px !important; }
+
+/* ── Status widget ── */
+[data-testid="stStatusWidget"] {
+    background-color: #1B2A4A !important;
+    border-radius: 4px !important;
+}
+[data-testid="stStatusWidget"] p,
+[data-testid="stStatusWidget"] span,
+[data-testid="stStatusWidget"] div {
+    color: #FFFFFF !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 0.78rem !important;
+    opacity: 1 !important;
+}
+[data-testid="stStatusWidget"] > div:last-child {
+    background-color: #FAFAF7 !important;
+    border: 1px solid #D6D0C4 !important;
+    padding: 0.8rem 1rem !important;
+}
+[data-testid="stStatusWidget"] > div:last-child p,
+[data-testid="stStatusWidget"] > div:last-child span {
+    color: #1B2A4A !important;
+    font-size: 0.75rem !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ── San Diego County cities ──────────────────────────────────────────────────
+SAN_DIEGO_CITIES = {
+    "Imperial Beach (DEMO)": {"zips": ["91932"], "bbox": (32.55, -117.14, 32.60, -117.08)},
+    "Carlsbad":              {"zips": ["92008","92009","92010","92011"], "bbox": (33.07, -117.38, 33.21, -117.24)},
+    "Chula Vista":           {"zips": ["91910","91911","91913","91914","91915"], "bbox": (32.58, -117.10, 32.68, -116.94)},
+    "Coronado":              {"zips": ["92118"], "bbox": (32.66, -117.19, 32.71, -117.13)},
+    "Del Mar":               {"zips": ["92014"], "bbox": (32.94, -117.28, 32.97, -117.24)},
+    "El Cajon":              {"zips": ["92019","92020","92021"], "bbox": (32.76, -117.00, 32.83, -116.88)},
+    "Encinitas":             {"zips": ["92023","92024"], "bbox": (33.01, -117.31, 33.09, -117.24)},
+    "Escondido":             {"zips": ["92025","92026","92027","92029"], "bbox": (33.08, -117.13, 33.17, -116.99)},
+    "La Mesa":               {"zips": ["91941","91942"], "bbox": (32.74, -117.04, 32.79, -116.98)},
+    "Lemon Grove":           {"zips": ["91945"], "bbox": (32.72, -117.04, 32.75, -117.00)},
+    "National City":         {"zips": ["91950"], "bbox": (32.65, -117.11, 32.69, -117.07)},
+    "Oceanside":             {"zips": ["92054","92056","92057","92058"], "bbox": (33.15, -117.40, 33.25, -117.24)},
+    "Poway":                 {"zips": ["92064"], "bbox": (32.93, -117.07, 33.02, -116.94)},
+    "San Diego":             {"zips": ["92101"], "bbox": (32.53, -117.28, 33.11, -116.90)},
+    "San Marcos":            {"zips": ["92069","92078"], "bbox": (33.11, -117.22, 33.17, -117.12)},
+    "Santee":                {"zips": ["92071"], "bbox": (32.82, -117.00, 32.88, -116.93)},
+    "Solana Beach":          {"zips": ["92075"], "bbox": (32.98, -117.28, 33.01, -117.24)},
+    "Vista":                 {"zips": ["92081","92083","92084"], "bbox": (33.17, -117.27, 33.23, -117.18)},
+    # Unincorporated communities
+    "Alpine":                {"zips": ["91901"], "bbox": (32.80, -116.80, 32.86, -116.73)},
+    "Bonita":                {"zips": ["91902"], "bbox": (32.65, -117.05, 32.68, -116.99)},
+    "Fallbrook":             {"zips": ["92028"], "bbox": (33.34, -117.28, 33.40, -117.20)},
+    "Jamul":                 {"zips": ["91935"], "bbox": (32.70, -116.88, 32.73, -116.82)},
+    "Lakeside":              {"zips": ["92040"], "bbox": (32.84, -116.95, 32.88, -116.88)},
+    "Ramona":                {"zips": ["92065"], "bbox": (33.03, -116.90, 33.07, -116.83)},
+    "Rancho San Diego":      {"zips": ["92019"], "bbox": (32.74, -116.95, 32.78, -116.89)},
+    "Rancho Santa Fe":       {"zips": ["92067"], "bbox": (33.00, -117.22, 33.05, -117.17)},
+    "Spring Valley":         {"zips": ["91977","91978"], "bbox": (32.72, -117.00, 32.76, -116.94)},
+    "Valley Center":         {"zips": ["92082"], "bbox": (33.20, -117.05, 33.25, -116.97)},
+}
+
+# ── Signal metadata ──────────────────────────────────────────────────────────
+SIGNAL_META = [
+    {
+        "key":    "layer_new_owner_signal",
+        "label":  "New Owner",
+        "group":  "residential",
+        "config": "new_owner",
+        "paid":   False,
+        "desc":   "Homes sold in the last 90 days. Data shows homeowners invest in major exterior improvements within 6-12 months of buying a home.",
+    },
+    {
+        "key":    "layer_building_permit_signal",
+        "label":  "Pool/Spa Permit",
+        "group":  "residential",
+        "config": "building_permit",
+        "paid":   False,
+        "desc":   "Recent pool, spa, or outdoor kitchen permits nearby. A pool almost always requires a surrounding deck or patio — the owner is already in 'construction mode' with financing secured.",
+    },
+    {
+        "key":    "layer_deck_permit_age_signal",
+        "label":  "Dated Deck Permit",
+        "group":  "residential",
+        "config": "deck_permit_age",
+        "paid":   False,
+        "desc":   "Deck, patio, or balcony permits issued 10+ years ago. A 15-year-old deck likely needs replacement or major repair.",
+    },
+    {
+        "key":    "layer_aging_neighborhood_signal",
+        "label":  "Aging Deck",
+        "group":  "residential",
+        "config": "aging_neighborhood",
+        "paid":   False,
+        "desc":   "Homes built 2000-2013 — original decks are hitting their replacement cycle. Pressure-treated wood decks become unsafe after 15-20 years.",
+    },
+    {
+        "key":    "layer_fire_hazard_signal",
+        "label":  "Fire Hazard Zone",
+        "group":  "residential",
+        "config": "fire_hazard",
+        "paid":   False,
+        "desc":   "Properties in CAL FIRE high-risk zones. Insurance companies are dropping homeowners unless they harden homes against fire. Non-combustible decking (composite/aluminum) is often required to keep coverage.",
+    },
+    {
+        "key":    "layer_safety_violation_signal",
+        "label":  "Safety Violation",
+        "group":  "residential",
+        "config": "safety_violation",
+        "paid":   False,
+        "desc":   "Properties flagged for unsafe structures, deck/balcony/stair violations in city Code Enforcement logs. These owners need a solution provider to clear city fines — you're not selling, you're solving.",
+    },
+    {
+        "key":    "layer_visual_audit_signal",
+        "label":  "Visual Audit (OSM)",
+        "group":  "residential",
+        "config": "visual_audit",
+        "paid":   False,
+        "desc":   "Queries OpenStreetMap for building material tags (wood, timber), deck/patio features, and construction dates. Free alternative to Street View AI — detects properties with likely aging wood decks.",
+    },
+    {
+        "key":    "layer_outdoor_seating_signal",
+        "label":  "Outdoor Seating",
+        "group":  "commercial",
+        "config": "outdoor_seating",
+        "paid":   False,
+        "desc":   "Restaurants and cafes with outdoor decks/seating areas. Post-pandemic, thousands added permanent outdoor decks. High-traffic = high wear = recurring quarterly maintenance contracts with higher liability motivation.",
+    },
+    {
+        "key":    "layer_municipal_contracts_signal",
+        "label":  "Municipal Contracts",
+        "group":  "commercial",
+        "config": "municipal_contracts",
+        "paid":   False,
+        "desc":   "Active/upcoming government solicitations on SAM.gov for boardwalk, pier, and park deck maintenance. One government contract can pay overhead for an entire crew for a year.",
+    },
+    {
+        "key":    "layer_curb_appeal_signal",
+        "label":  "Curb Appeal",
+        "group":  "premium",
+        "config": "curb_appeal",
+        "paid":   True,
+        "desc":   "Homes listed 60+ days (stale listings). Sellers are desperate — if photos show a gray, weathered deck, pitch the listing agent a 'Weekend Refresh' package (power wash + stain) to help close the sale.",
+    },
+]
+
+FILTER_META = [
+    {
+        "key":   "min_property_value",
+        "label": "Min Property Value ($500k+)",
+        "desc":  "Excludes properties assessed below $500,000 — focuses on homeowners with budget for quality deck work.",
+    },
+    {
+        "key":   "min_lot_size",
+        "label": "Min Lot Size (3,000+ sqft)",
+        "desc":  "Excludes small lots under 3,000 sqft — ensures enough yard space for a meaningful deck project.",
+    },
+    {
+        "key":   "single_family_only",
+        "label": "Single Family Only",
+        "desc":  "Excludes apartments, condos, and commercial buildings. Focuses on single-family homes with private yards.",
+    },
+    {
+        "key":   "exclude_new_construction",
+        "label": "Exclude New Construction",
+        "desc":  "Excludes homes built within the last 2 years — new homes already have modern decking.",
+    },
+]
+
+PREMIUM_LAYER_INFO = {
+    "curb_appeal": {
+        "api":       "Zillow / Redfin via RapidAPI",
+        "cost":      "Free tier: 500 requests/month; paid plans above that",
+        "free_tier": "500 requests/month free at RapidAPI",
+        "setup":     "Register at rapidapi.com → subscribe to a Zillow API → set RAPIDAPI_KEY in Streamlit Secrets (or config.py for local use).",
+        "degrades":  False,
+    },
+}
+
+LAYER_CRED = {
+    "curb_appeal": "RAPIDAPI_KEY",
+}
+
+
+# ── Score helpers ────────────────────────────────────────────────────────────
+
+def rescore(properties: list, active_keys: list) -> list:
+    total = len(active_keys)
+    result = []
+    for p in properties:
+        p = dict(p)
+        fired = sum(1 for k in active_keys if p.get(k)) if total else 0
+        p["opportunity_score"] = round((fired / total) * 100, 1) if total else 0.0
+        p["signals_fired"]     = fired
+        p["signals_total"]     = total
+        result.append(p)
+    return sorted(result, key=lambda x: x["opportunity_score"], reverse=True)
+
+
+def score_color(score: float) -> str:
+    if score >= 30:
+        return "#2E7D32"
+    if score >= 15:
+        return "#C0833E"
+    return "#7A8A9D"
+
+
+# ── Pipeline runner ──────────────────────────────────────────────────────────
+
+def run_full_scan(filter_state: dict, signal_state: dict) -> list:
+    for k, v in filter_state.items():
+        config.FILTERS[k] = v
+    for k, v in signal_state.items():
+        config.SIGNALS[k] = v
+
+    # Check for demo cached data
+    if config.CITY == "Imperial Beach (DEMO)":
+        demo_path = "demo_data/imperial_beach_demo.json"
+        if os.path.exists(demo_path):
+            st.session_state.scan_log.append("Loading cached demo data...")
+            with open(demo_path, "r") as f:
+                properties = json.load(f)
+            st.session_state.total_raw = len(properties)
+            st.session_state.scan_log.append(f"  -> {len(properties)} demo properties loaded")
+            return properties
+
+    st.session_state.scan_log.append("Querying OpenStreetMap for residential properties...")
+    properties = fetch_residential_properties()
+    st.session_state.total_raw = len(properties)
+    st.session_state.scan_log.append(f"  -> {len(properties):,} properties retrieved from OSM")
+
+    st.session_state.scan_log.append("Applying hard filters...")
+    properties, skipped = filter_properties(properties)
+    st.session_state.scan_log.append(
+        f"  -> {len(properties)} passed  |  "
+        f"value: {skipped['property_value']}  |  "
+        f"lot: {skipped['lot_size']}  |  "
+        f"type: {skipped['not_single_family']}  |  "
+        f"new: {skipped['new_construction']}"
+    )
+
+    if not properties:
+        return []
+
+    st.session_state.scan_log.append("Running signal layers...")
+    properties = run_all_layers(properties)
+    st.session_state.scan_log.append("  -> All layers complete")
+
+    return properties
+
+
+# ── Map builder ──────────────────────────────────────────────────────────────
+
+def build_map(properties: list) -> folium.Map:
+    if not properties:
+        return folium.Map(location=[32.7, -117.1], zoom_start=11)
+
+    lats   = [p["lat"] for p in properties]
+    lons   = [p["lon"] for p in properties]
+    center = [sum(lats) / len(lats), sum(lons) / len(lons)]
+    m      = folium.Map(location=center, zoom_start=13, tiles="CartoDB positron")
+
+    for p in properties:
+        score   = p.get("opportunity_score", 0)
+        color   = "#2E7D32" if score >= 30 else "#C0833E" if score >= 15 else "#9CA3AF"
+        address = p.get("address", "")
+        signals = signals_fired_list(p)
+        sig_html = "".join(
+            f'<span style="background:#E8F5E9;color:#1B5E20;padding:2px 6px;'
+            f'border:1px solid #2E7D32;font-size:10px;margin:2px;display:inline-block;'
+            f'border-radius:3px;">{s}</span>'
+            for s in signals
+        ) or "<em style='color:#7A8A9D'>no signals</em>"
+
+        year = p.get("year_built", "")
+        year_str = f"Built {year}" if year else "Year unknown"
+
+        popup_html = f"""
+        <div style="font-family:'Poppins',sans-serif;min-width:230px;color:#1B2A4A;
+                    background:#F5F5F0;padding:14px;border:1px solid #D6D0C4;border-radius:4px;">
+          <div style="font-size:22px;font-weight:700;color:{color};">{score:.1f}
+            <span style="font-size:12px;color:#7A8A9D;">/100</span>
+          </div>
+          <div style="font-size:12px;font-weight:500;margin:4px 0 8px;">{address[:50]}</div>
+          <div style="font-size:10px;color:#7A8A9D;margin-bottom:6px;">
+            {year_str} &nbsp;·&nbsp; {p.get('building_type','residential').title()}
+          </div>
+          <div style="margin-top:8px;">{sig_html}</div>
+        </div>
+        """
+        folium.CircleMarker(
+            location=[p["lat"], p["lon"]],
+            radius=8 + score / 10,
+            color=color,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.7,
+            popup=folium.Popup(popup_html, max_width=280),
+            tooltip=f"{score:.1f}/100 — {address[:35]}",
+        ).add_to(m)
+
+    return m
+
+
+# ── Rankings table builder ───────────────────────────────────────────────────
+
+def build_rankings_df(properties: list) -> pd.DataFrame:
+    rows = []
+    for rank, p in enumerate(properties, 1):
+        fired = signals_fired_list(p)
+        rows.append({
+            "Rank":       rank,
+            "Score":      p.get("opportunity_score", 0),
+            "Signals":    f"{p.get('signals_fired',0)}/{p.get('signals_total', len(ALL_SIGNAL_KEYS))}",
+            "Fired":      " · ".join(fired) if fired else "—",
+            "Address":    p.get("address", ""),
+            "Year Built": p.get("year_built", ""),
+            "Type":       p.get("building_type", "").title(),
+            "GPS":        p.get("gps_coordinates", ""),
+        })
+    return pd.DataFrame(rows)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PAGE LAYOUT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Header ───────────────────────────────────────────────────────────────────
+st.markdown('<span class="wcd-label">West Coast Deck</span>', unsafe_allow_html=True)
+
+if DEMO_MODE:
+    _h_left, _h_right = st.columns([2, 1])
+    with _h_left:
+        st.markdown("# Deck Scout")
+        st.markdown("*Residential deck opportunity intelligence — San Diego County*")
+    with _h_right:
+        st.markdown('<div class="demo-marker"></div>', unsafe_allow_html=True)
+        demo_btn = st.button(
+            "DEMO - WCD",
+            key="demo_wcd_btn",
+            use_container_width=True,
+        )
+else:
+    st.markdown("# Deck Scout")
+    st.markdown("*Residential deck opportunity intelligence — San Diego County*")
+    demo_btn = False
+
+# ── Demo preset ──────────────────────────────────────────────────────────────
+if demo_btn:
+    st.session_state["city_select"] = "Imperial Beach (DEMO)"
+    # Hard filters — all ON
+    for fm in FILTER_META:
+        st.session_state[f"filter_{fm['key']}"] = True
+    # Free signals — all ON
+    for sm in SIGNAL_META:
+        if not sm["paid"]:
+            st.session_state[f"sig_{sm['key']}"] = True
+    # Premium — OFF
+    for sm in SIGNAL_META:
+        if sm["paid"]:
+            st.session_state[f"sig_{sm['key']}"] = False
+    st.session_state["demo_run_trigger"] = True
+    st.rerun()
+
+# ── Hero image strip ─────────────────────────────────────────────────────────
+# Placeholder images — replace with actual deck photos
+HERO_IMAGES = []
+hero_dir = "assets"
+if os.path.isdir(hero_dir):
+    imgs = sorted(f for f in os.listdir(hero_dir) if f.lower().endswith(('.webp', '.jpg', '.jpeg', '.png')))
+    HERO_IMAGES = [os.path.join(hero_dir, f) for f in imgs[:4]]
+
+if HERO_IMAGES:
+    img_cols = st.columns(len(HERO_IMAGES), gap="small")
+    for col, path in zip(img_cols, HERO_IMAGES):
+        col.image(path, use_container_width=True)
+
+st.markdown("---")
+
+# ── City selector ────────────────────────────────────────────────────────────
+st.markdown('<span class="wcd-label">Target Area</span>', unsafe_allow_html=True)
+st.caption("Select a city in San Diego County to scan for deck opportunities.")
+
+city_names = list(SAN_DIEGO_CITIES.keys())
+default_idx = 0  # Imperial Beach (DEMO)
+
+selected_city = st.selectbox(
+    "City",
+    options=city_names,
+    index=default_idx,
+    label_visibility="collapsed",
+    key="city_select",
+)
+
+config.CITY      = selected_city
+config.CITY_BBOX = SAN_DIEGO_CITIES[selected_city]["bbox"]
+
+st.markdown("---")
+
+# ── Hard Filters ─────────────────────────────────────────────────────────────
+st.markdown('<span class="wcd-label">Hard Filters</span>', unsafe_allow_html=True)
+st.caption("All enabled filters must pass — failing any one excludes the property.")
+
+fc1, fc2 = st.columns(2)
+filter_state = {}
+for i, fm in enumerate(FILTER_META):
+    col = fc1 if i % 2 == 0 else fc2
+    with col:
+        filter_state[fm["key"]] = st.checkbox(
+            fm["label"],
+            value=config.FILTERS[fm["key"]],
+            key=f"filter_{fm['key']}",
+        )
+        st.caption(fm["desc"])
+
+st.markdown("---")
+
+# ── Residential Signals ──────────────────────────────────────────────────────
+st.markdown('<span class="wcd-label">Residential Signals</span>', unsafe_allow_html=True)
+st.caption("All free — annotation only, never excludes properties. Toggle to adjust the Opportunity Score.")
+
+signal_state = {}
+residential_signals = [sm for sm in SIGNAL_META if sm["group"] == "residential"]
+
+sc1, sc2, sc3 = st.columns(3)
+for i, sm in enumerate(residential_signals):
+    col = [sc1, sc2, sc3][i % 3]
+    with col:
+        signal_state[sm["config"]] = st.checkbox(
+            sm["label"],
+            value=config.SIGNALS.get(sm["config"], True),
+            key=f"sig_{sm['key']}",
+        )
+        st.caption(sm["desc"])
+
+st.markdown("---")
+
+# ── Commercial Signals ───────────────────────────────────────────────────────
+st.markdown('<span class="wcd-label">Commercial Signals</span>', unsafe_allow_html=True)
+st.caption("Free — targets businesses and government contracts for recurring deck maintenance revenue.")
+
+commercial_signals = [sm for sm in SIGNAL_META if sm["group"] == "commercial"]
+
+cc1, cc2 = st.columns(2)
+for i, sm in enumerate(commercial_signals):
+    col = [cc1, cc2][i % 2]
+    with col:
+        signal_state[sm["config"]] = st.checkbox(
+            sm["label"],
+            value=config.SIGNALS.get(sm["config"], True),
+            key=f"sig_{sm['key']}",
+        )
+        st.caption(sm["desc"])
+
+st.markdown("---")
+
+# ── Premium Layers ───────────────────────────────────────────────────────────
+st.markdown('<span class="wcd-label">Premium Layers</span>', unsafe_allow_html=True)
+st.caption("Require API credentials — disabled by default. Enable when credentials are configured.")
+
+premium_signals = [sm for sm in SIGNAL_META if sm["group"] == "premium"]
+
+for sm in premium_signals:
+    info = PREMIUM_LAYER_INFO.get(sm["config"], {})
+    signal_state[sm["config"]] = st.checkbox(
+        sm["label"],
+        value=False,
+        key=f"sig_{sm['key']}",
+    )
+    st.caption(sm["desc"])
+    if info:
+        with st.expander("Setup & pricing"):
+            st.markdown(f"**API source:** {info['api']}")
+            st.markdown(f"**Cost:** {info['cost']}")
+            if info.get("free_tier"):
+                st.markdown(f"**Free tier:** {info['free_tier']}")
+            else:
+                st.markdown("**Free tier:** None")
+            st.markdown(
+                f"**Without credentials:** "
+                f"{'Returns limited data' if info['degrades'] else 'Returns no data — layer contributes nothing to the score'}"
+            )
+            st.markdown(f"**Setup:** {info['setup']}")
+
+# ── Credential warning ───────────────────────────────────────────────────────
+missing_creds = []
+for cfg_key, cred_var in LAYER_CRED.items():
+    if signal_state.get(cfg_key) and not getattr(config, cred_var, ""):
+        info = PREMIUM_LAYER_INFO[cfg_key]
+        label = next(sm["label"] for sm in SIGNAL_META if sm["config"] == cfg_key)
+        missing_creds.append((label, cred_var, info))
+
+if missing_creds:
+    n = len(missing_creds)
+    rows_html = ""
+    for label, cred_var, info in missing_creds:
+        rows_html += (
+            f'<li style="margin-bottom:0.5rem;">'
+            f'<strong>{label}</strong>'
+            f' — needs <code style="background:#FFF0A0;padding:1px 4px;border-radius:3px;'
+            f'color:#8B4513;font-size:0.72rem;">{cred_var}</code>'
+            f'<br><span style="color:#5A6B7D;font-size:0.72rem;">-> {info["setup"]}</span>'
+            f'</li>'
+        )
+    st.markdown(
+        f'<div style="background:#FFF9C4;border:1.5px solid #C0833E;padding:1rem 1.2rem;'
+        f'border-radius:4px;margin:0.5rem 0;">'
+        f'<p style="color:#1B2A4A;font-weight:700;margin:0 0 0.4rem 0;font-family:Poppins,sans-serif;'
+        f'font-size:0.82rem;">'
+        f'{n} premium layer{"s" if n > 1 else ""} enabled without credentials.</p>'
+        f'<ul style="color:#1B2A4A;font-family:Poppins,sans-serif;font-size:0.78rem;'
+        f'margin:0;padding-left:1.2rem;">{rows_html}</ul></div>',
+        unsafe_allow_html=True,
+    )
+
+st.markdown("---")
+
+# ── Run Scan button ──────────────────────────────────────────────────────────
+if st.session_state.get("scan_time"):
+    elapsed = st.session_state.get("scan_elapsed", 0)
+    st.caption(
+        f"Last scan: {st.session_state.scan_time.strftime('%Y-%m-%d  %H:%M')}  "
+        f"({elapsed:.0f}s)  ·  City: {st.session_state.get('scan_city', '')}"
+    )
+
+run_btn = st.button("Run Deck Scout Scan", type="primary", use_container_width=True)
+
+# ── Trigger scan ─────────────────────────────────────────────────────────────
+_demo_trigger = st.session_state.pop("demo_run_trigger", False)
+if run_btn or _demo_trigger:
+    st.session_state.scan_log  = []
+    st.session_state.scan_city = config.CITY
+    t0 = time.time()
+
+    with st.status("Running Deck Scout scan...", expanded=True) as scan_status:
+        log_placeholder = st.empty()
+
+        import builtins
+        original_print = builtins.print
+
+        def ui_print(*args, **kwargs):
+            msg = " ".join(str(a) for a in args)
+            st.session_state.scan_log.append(msg)
+            log_placeholder.markdown(
+                "\n".join(f"> {line}" for line in st.session_state.scan_log[-8:])
+            )
+            original_print(*args, **kwargs)
+
+        builtins.print = ui_print
+        try:
+            properties = run_full_scan(filter_state, signal_state)
+        finally:
+            builtins.print = original_print
+
+        elapsed = time.time() - t0
+        st.session_state.properties   = properties
+        st.session_state.scan_time    = datetime.now()
+        st.session_state.scan_elapsed = elapsed
+
+        total_raw = st.session_state.get("total_raw", 0)
+        if properties:
+            scan_status.update(
+                label=(
+                    f"Scan complete — scanned {total_raw:,} properties in {config.CITY}, "
+                    f"found {len(properties)} results  ({elapsed:.0f}s)"
+                ),
+                state="complete",
+            )
+        else:
+            scan_status.update(
+                label=f"Scan complete — scanned {total_raw:,} properties, none passed all hard filters",
+                state="error",
+            )
+
+# ── Display results ──────────────────────────────────────────────────────────
+st.markdown("---")
+
+if "properties" not in st.session_state or not st.session_state.properties:
+    if not st.session_state.get("properties"):
+        st.markdown(
+            '<div style="background:#ECEAE4;border:1px solid #D6D0C4;'
+            'border-radius:4px;padding:1rem 1.2rem;">'
+            '<p style="color:#1B2A4A;font-family:Poppins,sans-serif;'
+            'font-size:0.82rem;margin:0 0 0.3rem 0;">'
+            'Configure your parameters above and click <strong>Run Deck Scout Scan</strong> to begin.</p>'
+            '<p style="color:#5A6B7D;font-family:Poppins,sans-serif;'
+            'font-size:0.78rem;margin:0;">'
+            'The scan queries OpenStreetMap and public data sources for deck opportunities in your selected city.</p>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.warning("No properties passed all hard filters. Try relaxing some filters above.")
+else:
+    # Determine active signal keys from current toggle state
+    active_keys = [
+        sm["key"]
+        for sm in SIGNAL_META
+        if signal_state.get(sm["config"], True)
+    ]
+
+    # Re-score instantly from cached signals
+    properties = rescore(st.session_state.properties, active_keys)
+
+    # ── Summary metrics ──────────────────────────────────────────────────────
+    scores    = [p["opportunity_score"] for p in properties]
+    total_raw = st.session_state.get("total_raw", 0)
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Properties Matched", len(properties), help=f"{total_raw:,} total properties scanned")
+    n_active = len(active_keys)
+    m2.metric("Top Score", f"{max(scores):.0f}%", help=f"Percentage of active signals fired ({n_active} signals running)")
+    m3.metric("Average Score", f"{sum(scores)/len(scores):.0f}%")
+    m4.metric("Signals Active", f"{n_active} of {len(ALL_SIGNAL_KEYS)}", help="Enable more signals to deepen the analysis")
+    if total_raw:
+        st.caption(
+            f"Scanned **{total_raw:,}** total properties in {st.session_state.get('scan_city', config.CITY)}"
+            f" — **{len(properties)}** matched all required filters."
+        )
+
+    st.markdown("---")
+
+    # ── Export buttons ────────────────────────────────────────────────────────
+    df_full   = build_rankings_df(properties)
+    csv_data  = df_full.to_csv(index=False).encode("utf-8")
+    json_data = json.dumps(properties, indent=2, default=str).encode("utf-8")
+    ts        = datetime.now().strftime("%Y%m%d_%H%M")
+
+    ec1, ec2, _ = st.columns([1, 1, 4])
+    ec1.download_button(
+        "Export CSV",
+        csv_data,
+        file_name=f"deck_scout_{ts}.csv",
+        mime="text/csv",
+    )
+    ec2.download_button(
+        "Export JSON",
+        json_data,
+        file_name=f"deck_scout_{ts}.json",
+        mime="application/json",
+    )
+
+    st.markdown("---")
+
+    # ── Tabs ─────────────────────────────────────────────────────────────────
+    tab_rank, tab_map, tab_raw = st.tabs(["Rankings", "Map", "Raw Data"])
+
+    # ── Property Cards ───────────────────────────────────────────────────────
+    with tab_rank:
+        active_report = st.session_state.get("active_report", None)
+
+        def render_report(idx, p):
+            """Render the full-width Intelligence Report panel."""
+            score     = p["opportunity_score"]
+            address   = p.get("address", f"Property #{idx+1}")
+            fired     = signals_fired_list(p)
+            score_clr = score_color(score)
+
+            st.markdown(
+                f'<div style="margin:0.8rem 0 1rem;padding:1.2rem 1.4rem;'
+                f'background:#ECEAE4;border:1px solid #D6D0C4;border-top:3px solid #C0833E;'
+                f'border-radius:4px;">'
+                f'<div style="font-family:Poppins,sans-serif;font-size:0.56rem;font-weight:700;'
+                f'letter-spacing:0.2em;text-transform:uppercase;color:#C0833E;">Opportunity Report</div>'
+                f'<div style="font-family:Poppins,sans-serif;font-size:1.6rem;font-weight:700;'
+                f'color:#1B2A4A;line-height:1.2;margin-top:0.15rem;">{address}</div>'
+                f'<div style="font-family:Poppins,sans-serif;font-size:0.68rem;color:{score_clr};'
+                f'font-weight:600;margin-top:0.25rem;">'
+                f'Opportunity Score: {score:.0f}% ({p.get("signals_fired",0)} of {p.get("signals_total", n_active)} signals)'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            dc1, dc2, dc3 = st.columns(3)
+            dc1.metric("Opportunity Score", f"{score:.0f}%")
+            dc1.metric("Year Built", p.get("year_built") or "Unknown")
+            dc2.metric("Building Type", (p.get("building_type") or "residential").title())
+            dc2.metric("Material", (p.get("material") or "Unknown").title())
+            dc3.metric("Property Type", (p.get("property_type") or "residential").title())
+            dc3.metric("GPS", p.get("gps_coordinates", ""))
+
+            st.markdown("**Signals fired:**")
+            if fired:
+                sig_cols = st.columns(min(len(fired), 4))
+                for i, sig in enumerate(fired):
+                    sig_cols[i % 4].success(f"  {sig}")
+            else:
+                st.caption("No signals fired for this property.")
+
+            unfired = [sm["label"] for sm in SIGNAL_META if sm["key"] in active_keys and not p.get(sm["key"])]
+            if unfired:
+                st.markdown("**Not triggered:**")
+                st.caption("  ·  ".join(unfired))
+
+            with st.expander("Full signal details"):
+                detail_rows = []
+                for sm in SIGNAL_META:
+                    if sm["key"] not in active_keys:
+                        continue
+                    detail_key = sm["key"].replace("_signal", "_detail")
+                    detail_rows.append({
+                        "Signal": sm["label"],
+                        "Fired":  "Yes" if p.get(sm["key"]) else "—",
+                        "Detail": str(p.get(detail_key, "")),
+                    })
+                st.dataframe(pd.DataFrame(detail_rows), use_container_width=True, hide_index=True)
+
+        # Render cards in rows of 3
+        row_size = 3
+        for row_start in range(0, len(properties), row_size):
+            row_props = properties[row_start:row_start + row_size]
+            cols = st.columns(row_size)
+
+            for col_idx, (col, p) in enumerate(zip(cols, row_props)):
+                idx       = row_start + col_idx
+                score     = p["opportunity_score"]
+                address   = p.get("address", f"Property #{idx+1}")
+                fired     = signals_fired_list(p)
+                year      = p.get("year_built", "")
+                btype     = (p.get("building_type") or "residential").title()
+                score_clr = score_color(score)
+                is_open   = (active_report == idx)
+
+                with col:
+                    # Map link placeholder
+                    lat = p.get("lat", 32.7)
+                    lon = p.get("lon", -117.1)
+                    maps_url = f"https://www.google.com/maps/@{lat},{lon},18z"
+                    st.markdown(
+                        f'<a href="{maps_url}" target="_blank" style="text-decoration:none;">'
+                        f'<div style="width:100%;height:120px;background:#ECEAE4;margin-bottom:0;'
+                        f'display:flex;flex-direction:column;align-items:center;justify-content:center;'
+                        f'border:1px solid #D6D0C4;border-radius:4px;cursor:pointer;">'
+                        f'<div style="font-size:1.4rem;margin-bottom:0.3rem;">📍</div>'
+                        f'<div style="font-family:Poppins,sans-serif;font-size:0.6rem;font-weight:600;'
+                        f'letter-spacing:0.08em;color:#5A6B7D;margin-bottom:0.2rem;">'
+                        f'{lat:.4f}, {lon:.4f}</div>'
+                        f'<div style="font-family:Poppins,sans-serif;font-size:0.52rem;color:#C0833E;">'
+                        f'View on Google Maps</div>'
+                        f'</div></a>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f'<div style="padding:0.6rem 0 0.4rem;border-bottom:1px solid #D6D0C4;">'
+                        f'<div style="font-family:Poppins,sans-serif;font-size:0.56rem;font-weight:700;'
+                        f'letter-spacing:0.14em;text-transform:uppercase;color:{score_clr};margin-bottom:0.15rem;">'
+                        f'Score {score:.0f}% ({p.get("signals_fired",0)} of {p.get("signals_total", n_active)})</div>'
+                        f'<div style="font-family:Poppins,sans-serif;font-weight:600;font-size:0.9rem;'
+                        f'color:#1B2A4A;line-height:1.25;">{address[:55]}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                    # Key Intel table
+                    year_str = str(year) if year else "—"
+                    st.markdown(
+                        f'<div style="padding:0.5rem 0;border-bottom:1px solid #D6D0C4;">'
+                        f'<div style="font-family:Poppins,sans-serif;font-size:0.52rem;font-weight:700;'
+                        f'letter-spacing:0.16em;text-transform:uppercase;color:#C0833E;margin-bottom:0.3rem;">Key Intel</div>'
+                        f'<table style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif;'
+                        f'font-size:0.72rem;color:#1B2A4A;">'
+                        f'<tr><td style="padding:2px 4px;color:#7A8A9D;">Year Built</td>'
+                        f'<td style="padding:2px 0;text-align:right;font-weight:500;">{year_str}</td></tr>'
+                        f'<tr><td style="padding:2px 4px;color:#7A8A9D;">Type</td>'
+                        f'<td style="padding:2px 0;text-align:right;font-weight:500;">{btype}</td></tr>'
+                        f'<tr><td style="padding:2px 4px;color:#7A8A9D;">Material</td>'
+                        f'<td style="padding:2px 0;text-align:right;font-weight:500;">'
+                        f'{(p.get("material") or "—").title()}</td></tr>'
+                        f'</table></div>',
+                        unsafe_allow_html=True,
+                    )
+                    if fired:
+                        chips = "".join(
+                            f'<span style="display:inline-block;background:#E8F5E9;color:#1B5E20;'
+                            f'border:1px solid #2E7D32;font-family:Poppins,sans-serif;'
+                            f'font-size:0.58rem;padding:2px 6px;margin:2px 2px 0 0;'
+                            f'border-radius:3px;">{sig}</span>'
+                            for sig in fired
+                        )
+                        st.markdown(f'<div style="padding:0.4rem 0 0.5rem;">{chips}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(
+                            '<div style="padding:0.4rem 0 0.5rem;font-family:Poppins,sans-serif;'
+                            'font-size:0.7rem;color:#7A8A9D;font-style:italic;">No signals fired</div>',
+                            unsafe_allow_html=True,
+                        )
+                    btn_label = "Close Report" if is_open else "View Report"
+                    if st.button(btn_label, key=f"report_btn_{idx}", use_container_width=True):
+                        st.session_state.active_report = None if is_open else idx
+                        st.rerun()
+
+            # After each row: inject report if this row contains the active card
+            if active_report is not None and row_start <= active_report < row_start + row_size:
+                render_report(active_report, properties[active_report])
+
+    # ── Map ──────────────────────────────────────────────────────────────────
+    with tab_map:
+        st.caption(
+            "Pins sized and coloured by Opportunity Score.  "
+            "Green >= 30  ·  Gold 15-29  ·  Grey < 15.  Click any pin for details."
+        )
+        m = build_map(properties)
+        st_folium(m, use_container_width=True, height=560)
+
+    # ── Raw Data ─────────────────────────────────────────────────────────────
+    with tab_raw:
+        st.caption("Complete field dump for all properties, sorted by Opportunity Score.")
+        all_keys = list(dict.fromkeys(k for p in properties for k in p.keys()))
+        df_raw = pd.DataFrame([
+            {k: str(p.get(k, "")) if p.get(k) is not None else "" for k in all_keys}
+            for p in properties
+        ])
+        st.dataframe(df_raw, use_container_width=True, height=500)
+
+# ── Footer ───────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown(
+    '<p style="font-family:Poppins,sans-serif;font-size:0.8rem;'
+    'color:#7A8A9D;text-align:center;letter-spacing:0.04em;">'
+    'West Coast Deck &nbsp;·&nbsp; Deck Scout &nbsp;·&nbsp; San Diego County Deck Opportunity Intelligence'
+    '</p>',
+    unsafe_allow_html=True,
+)

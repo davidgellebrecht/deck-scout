@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+*.csv
+*.json
+!demo_data/*.json
+!data/*.geojson
+.streamlit/secrets.toml
+venv/
+.venv/
+deck-scout/
