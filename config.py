@@ -15,7 +15,7 @@ CITY = "Imperial Beach (DEMO)"
 CITY_BBOX = (32.55, -117.14, 32.60, -117.08)
 
 # ─── Thresholds ──────────────────────────────────────────────────────────────
-MIN_PROPERTY_VALUE      = 500_000       # USD
+MIN_PROPERTY_VALUE      = 1_500_000     # USD
 MIN_LOT_SQFT            = 3_000         # square feet
 NEW_CONSTRUCTION_YEARS  = 2             # exclude homes built within this many years
 RECENT_SALE_DAYS        = 90            # "New Owner" trigger window

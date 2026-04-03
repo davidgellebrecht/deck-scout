@@ -35,6 +35,11 @@ from rank import (
 # ── Demo mode ────────────────────────────────────────────────────────────────
 DEMO_MODE = True
 
+# ── Pro access ───────────────────────────────────────────────────────────────
+# Set PRO_ACCESS = "true" in Streamlit Secrets to unlock all features.
+# Without it, users get a limited demo (Imperial Beach only, 3 results max).
+PRO_MODE = False
+
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Deck Scout — West Coast Deck",
@@ -46,8 +51,11 @@ st.set_page_config(
 # ── Load Streamlit secrets ───────────────────────────────────────────────────
 try:
     config.RAPIDAPI_KEY = st.secrets.get("RAPIDAPI_KEY", config.RAPIDAPI_KEY)
+    PRO_MODE = str(st.secrets.get("PRO_ACCESS", "")).lower() == "true"
 except Exception:
     pass
+
+DEMO_RESULT_LIMIT = 3  # Max results shown in demo mode
 
 # ── West Coast Deck CSS ──────────────────────────────────────────────────────
 st.markdown("""
@@ -390,6 +398,26 @@ hr {
 </style>
 """, unsafe_allow_html=True)
 
+# ── Upgrade CTA ──────────────────────────────────────────────────────────────
+
+def show_upgrade_cta():
+    """Display the upgrade prompt for demo users."""
+    st.markdown(
+        '<div style="background:linear-gradient(135deg, #1B2A4A 0%, #2C3E50 100%);'
+        'border:2px solid #C0833E;border-radius:8px;padding:2rem 2.5rem;'
+        'margin:1.5rem 0;text-align:center;">'
+        '<div style="font-size:1.4rem;margin-bottom:0.5rem;">&#128274;</div>'
+        '<div style="font-family:Poppins,sans-serif;font-size:1.1rem;font-weight:700;'
+        'color:#FFFFFF;margin-bottom:0.6rem;">Upgrade to Deck Scout Pro</div>'
+        '<div style="font-family:Poppins,sans-serif;font-size:0.78rem;color:#D6D0C4;'
+        'line-height:1.6;max-width:500px;margin:0 auto;">'
+        'Unlock all 28 San Diego County cities, unlimited property results, '
+        'CSV/JSON export, and all 10 signal layers.'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
 # ── San Diego County cities ──────────────────────────────────────────────────
 SAN_DIEGO_CITIES = {
     "Imperial Beach (DEMO)": {"zips": ["91932"], "bbox": (32.55, -117.14, 32.60, -117.08)},
@@ -510,8 +538,8 @@ SIGNAL_META = [
 FILTER_META = [
     {
         "key":   "min_property_value",
-        "label": "Min Property Value ($500k+)",
-        "desc":  "Excludes properties assessed below $500,000 — focuses on homeowners with budget for quality deck work.",
+        "label": "Min Property Value ($1.5M+)",
+        "desc":  "Excludes properties assessed below $1,500,000 — focuses on premium homeowners with budget for quality deck work.",
     },
     {
         "key":   "min_lot_size",
@@ -745,10 +773,15 @@ st.markdown("---")
 
 # ── City selector ────────────────────────────────────────────────────────────
 st.markdown('<span class="wcd-label">Target Area</span>', unsafe_allow_html=True)
-st.caption("Select a city in San Diego County to scan for deck opportunities.")
 
-city_names = list(SAN_DIEGO_CITIES.keys())
-default_idx = 0  # Imperial Beach (DEMO)
+if PRO_MODE:
+    st.caption("Select a city in San Diego County to scan for deck opportunities.")
+    city_names = list(SAN_DIEGO_CITIES.keys())
+else:
+    st.caption("Demo mode — Imperial Beach only. Upgrade to Pro to unlock all 28 cities.")
+    city_names = ["Imperial Beach (DEMO)"]
+
+default_idx = 0
 
 selected_city = st.selectbox(
     "City",
@@ -758,8 +791,32 @@ selected_city = st.selectbox(
     key="city_select",
 )
 
+if not PRO_MODE and selected_city != "Imperial Beach (DEMO)":
+    selected_city = "Imperial Beach (DEMO)"
+
 config.CITY      = selected_city
 config.CITY_BBOX = SAN_DIEGO_CITIES[selected_city]["bbox"]
+
+if not PRO_MODE:
+    # Show locked cities as a visual teaser
+    locked_cities = [c for c in SAN_DIEGO_CITIES.keys() if c != "Imperial Beach (DEMO)"]
+    locked_html = "".join(
+        f'<span style="display:inline-block;background:#ECEAE4;color:#7A8A9D;'
+        f'font-family:Poppins,sans-serif;font-size:0.65rem;padding:3px 8px;'
+        f'margin:2px;border:1px solid #D6D0C4;border-radius:3px;">'
+        f'&#128274; {c}</span>'
+        for c in locked_cities[:12]
+    )
+    remaining = len(locked_cities) - 12
+    if remaining > 0:
+        locked_html += (
+            f'<span style="display:inline-block;color:#7A8A9D;font-family:Poppins,sans-serif;'
+            f'font-size:0.65rem;padding:3px 8px;margin:2px;">+ {remaining} more</span>'
+        )
+    st.markdown(
+        f'<div style="margin:0.3rem 0 0.5rem;">{locked_html}</div>',
+        unsafe_allow_html=True,
+    )
 
 st.markdown("---")
 
@@ -986,24 +1043,32 @@ else:
     st.markdown("---")
 
     # ── Export buttons ────────────────────────────────────────────────────────
-    df_full   = build_rankings_df(properties)
-    csv_data  = df_full.to_csv(index=False).encode("utf-8")
-    json_data = json.dumps(properties, indent=2, default=str).encode("utf-8")
-    ts        = datetime.now().strftime("%Y%m%d_%H%M")
+    if PRO_MODE:
+        df_full   = build_rankings_df(properties)
+        csv_data  = df_full.to_csv(index=False).encode("utf-8")
+        json_data = json.dumps(properties, indent=2, default=str).encode("utf-8")
+        ts        = datetime.now().strftime("%Y%m%d_%H%M")
 
-    ec1, ec2, _ = st.columns([1, 1, 4])
-    ec1.download_button(
-        "Export CSV",
-        csv_data,
-        file_name=f"deck_scout_{ts}.csv",
-        mime="text/csv",
-    )
-    ec2.download_button(
-        "Export JSON",
-        json_data,
-        file_name=f"deck_scout_{ts}.json",
-        mime="application/json",
-    )
+        ec1, ec2, _ = st.columns([1, 1, 4])
+        ec1.download_button(
+            "Export CSV",
+            csv_data,
+            file_name=f"deck_scout_{ts}.csv",
+            mime="text/csv",
+        )
+        ec2.download_button(
+            "Export JSON",
+            json_data,
+            file_name=f"deck_scout_{ts}.json",
+            mime="application/json",
+        )
+    else:
+        st.markdown(
+            '<div style="background:#ECEAE4;border:1px solid #D6D0C4;border-radius:4px;'
+            'padding:0.6rem 1rem;font-family:Poppins,sans-serif;font-size:0.75rem;color:#7A8A9D;">'
+            '&#128274; CSV and JSON export available with Deck Scout Pro.</div>',
+            unsafe_allow_html=True,
+        )
 
     st.markdown("---")
 
@@ -1070,10 +1135,11 @@ else:
                     })
                 st.dataframe(pd.DataFrame(detail_rows), use_container_width=True, hide_index=True)
 
-        # Render cards in rows of 3
+        # Render cards in rows of 3 (limited in demo mode)
         row_size = 3
-        for row_start in range(0, len(properties), row_size):
-            row_props = properties[row_start:row_start + row_size]
+        display_properties = properties if PRO_MODE else properties[:DEMO_RESULT_LIMIT]
+        for row_start in range(0, len(display_properties), row_size):
+            row_props = display_properties[row_start:row_start + row_size]
             cols = st.columns(row_size)
 
             for col_idx, (col, p) in enumerate(zip(cols, row_props)):
@@ -1157,24 +1223,45 @@ else:
             if active_report is not None and row_start <= active_report < row_start + row_size:
                 render_report(active_report, properties[active_report])
 
+        # Show upgrade CTA if results were truncated
+        if not PRO_MODE and len(properties) > DEMO_RESULT_LIMIT:
+            remaining = len(properties) - DEMO_RESULT_LIMIT
+            st.markdown(
+                f'<div style="text-align:center;padding:0.8rem 0;font-family:Poppins,sans-serif;'
+                f'font-size:0.75rem;color:#7A8A9D;margin-bottom:0.5rem;">'
+                f'+ {remaining} more propert{"y" if remaining == 1 else "ies"} hidden in demo mode</div>',
+                unsafe_allow_html=True,
+            )
+            show_upgrade_cta()
+
     # ── Map ──────────────────────────────────────────────────────────────────
     with tab_map:
         st.caption(
             "Pins sized and coloured by Opportunity Score.  "
             "Green >= 30  ·  Gold 15-29  ·  Grey < 15.  Click any pin for details."
         )
-        m = build_map(properties)
+        map_properties = properties if PRO_MODE else properties[:DEMO_RESULT_LIMIT]
+        m = build_map(map_properties)
         st_folium(m, use_container_width=True, height=560)
+        if not PRO_MODE and len(properties) > DEMO_RESULT_LIMIT:
+            show_upgrade_cta()
 
     # ── Raw Data ─────────────────────────────────────────────────────────────
     with tab_raw:
-        st.caption("Complete field dump for all properties, sorted by Opportunity Score.")
-        all_keys = list(dict.fromkeys(k for p in properties for k in p.keys()))
+        if PRO_MODE:
+            st.caption("Complete field dump for all properties, sorted by Opportunity Score.")
+            raw_properties = properties
+        else:
+            st.caption("Demo mode — showing first 3 results only.")
+            raw_properties = properties[:DEMO_RESULT_LIMIT]
+        all_keys = list(dict.fromkeys(k for p in raw_properties for k in p.keys()))
         df_raw = pd.DataFrame([
             {k: str(p.get(k, "")) if p.get(k) is not None else "" for k in all_keys}
-            for p in properties
+            for p in raw_properties
         ])
         st.dataframe(df_raw, use_container_width=True, height=500)
+        if not PRO_MODE and len(properties) > DEMO_RESULT_LIMIT:
+            show_upgrade_cta()
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
