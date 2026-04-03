@@ -537,16 +537,18 @@ FILTER_META = [
         "desc":  "Excludes small lots under 3,000 sqft — ensures enough yard space for a meaningful deck project.",
     },
     {
-        "key":   "single_family_only",
-        "label": "Single Family Only",
-        "desc":  "Excludes apartments, condos, and commercial buildings. Focuses on single-family homes with private yards.",
-    },
-    {
         "key":   "exclude_new_construction",
         "label": "Exclude New Construction",
         "desc":  "Excludes homes built within the last 2 years — new homes already have modern decking.",
     },
 ]
+
+# Property type is handled separately as a selectbox (not a checkbox)
+PROPERTY_TYPE_OPTIONS = {
+    "All":         "Show all property types — residential, condos, apartments, and commercial.",
+    "Residential": "Houses, condos, townhomes, and apartments — any property where people live.",
+    "Commercial":  "Restaurants, bars, cafes, and other businesses with outdoor deck areas.",
+}
 
 PREMIUM_LAYER_INFO = {
     "curb_appeal": {
@@ -781,6 +783,18 @@ for i, fm in enumerate(FILTER_META):
             key=f"filter_{fm['key']}",
         )
         st.caption(fm["desc"])
+
+# Property type selector
+st.markdown("")
+prop_type_options = list(PROPERTY_TYPE_OPTIONS.keys())
+selected_prop_type = st.selectbox(
+    "Property Type",
+    options=prop_type_options,
+    index=0,
+    key="filter_property_type",
+)
+st.caption(PROPERTY_TYPE_OPTIONS[selected_prop_type])
+filter_state["property_type"] = selected_prop_type
 
 st.markdown("---")
 

@@ -5,8 +5,8 @@
 FILTERS = {
     "min_property_value":       True,
     "min_lot_size":             True,
-    "single_family_only":       True,
     "exclude_new_construction": True,
+    "property_type":            "All",    # "All", "Residential", or "Commercial"
 }
 
 # ─── Region ──────────────────────────────────────────────────────────────────

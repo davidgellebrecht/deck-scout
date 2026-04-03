@@ -202,9 +202,10 @@ def filter_properties(properties: list) -> tuple:
     Returns (passed, skipped_counts).
     """
     passed = []
-    skipped = {"property_value": 0, "lot_size": 0, "not_single_family": 0, "new_construction": 0}
+    skipped = {"property_value": 0, "lot_size": 0, "property_type": 0, "new_construction": 0}
 
     current_year = date.today().year
+    prop_type_filter = config.FILTERS.get("property_type", "All")
 
     for prop in properties:
         # Filter: minimum property value
@@ -221,11 +222,14 @@ def filter_properties(properties: list) -> tuple:
                 skipped["lot_size"] += 1
                 continue
 
-        # Filter: single family only
-        if config.FILTERS["single_family_only"]:
-            btype = prop.get("building_type", "").lower()
-            if btype in ("apartments", "commercial", "retail", "industrial"):
-                skipped["not_single_family"] += 1
+        # Filter: property type
+        if prop_type_filter != "All":
+            ptype = (prop.get("property_type") or "residential").lower()
+            if prop_type_filter == "Residential" and ptype == "commercial":
+                skipped["property_type"] += 1
+                continue
+            if prop_type_filter == "Commercial" and ptype != "commercial":
+                skipped["property_type"] += 1
                 continue
 
         # Filter: exclude new construction
