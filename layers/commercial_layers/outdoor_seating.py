@@ -2,38 +2,12 @@
 """
 Signal 8: Commercial Outdoor Seating
 
-Queries OSM for restaurants/cafes with outdoor_seating=yes tag.
-Post-pandemic, restaurants added permanent outdoor decks — high-traffic
-areas requiring constant maintenance. Pitch quarterly safety contracts.
+Only fires if the property itself IS a restaurant/cafe/bar with outdoor
+seating. Does NOT fire on residential properties just because a restaurant
+is nearby.
 """
 
-import time
 from layers.base import BaseLayer
-import config
-
-try:
-    import requests as req_lib
-except ImportError:
-    req_lib = None
-
-
-def _overpass(query: str) -> dict:
-    if not req_lib:
-        return {"elements": []}
-    for url in config.OVERPASS_FALLBACK_URLS:
-        for attempt in range(2):
-            try:
-                resp = req_lib.post(
-                    url,
-                    data={"data": query},
-                    timeout=config.OVERPASS_TIMEOUT + 10,
-                )
-                resp.raise_for_status()
-                return resp.json()
-            except Exception:
-                if attempt == 0:
-                    time.sleep(5)
-    return {"elements": []}
 
 
 class OutdoorSeatingLayer(BaseLayer):
@@ -42,51 +16,36 @@ class OutdoorSeatingLayer(BaseLayer):
     paid  = False
 
     def run(self, prop: dict) -> dict:
-        lat = prop.get("lat")
-        lon = prop.get("lon")
-        if not lat or not lon:
-            return self._empty_result(detail="No coordinates available")
+        # Only fire on commercial properties that are restaurants
+        prop_type = (prop.get("property_type") or "").lower()
+        amenity = (prop.get("amenity") or "").lower()
+        has_outdoor = prop.get("has_outdoor_seating", False)
+        name = prop.get("name", "")
 
-        # This layer scans the whole city bbox for restaurants with outdoor seating
-        # so it runs once per city (results cached in prop if already run)
-        if prop.get("_outdoor_seating_scanned"):
-            return self._empty_result(detail="Already scanned for this batch")
+        # Must be a commercial/restaurant property
+        if prop_type != "commercial" and amenity not in ("restaurant", "cafe", "bar"):
+            return self._empty_result(
+                detail="Not a restaurant — outdoor seating signal only applies to commercial properties"
+            )
 
-        s, w, n, e = config.CITY_BBOX
-        query = f"""
-        [out:json][timeout:{config.OVERPASS_TIMEOUT}];
-        (
-          node["amenity"~"restaurant|cafe|bar"]["outdoor_seating"="yes"]({s},{w},{n},{e});
-          way["amenity"~"restaurant|cafe|bar"]["outdoor_seating"="yes"]({s},{w},{n},{e});
-          node["amenity"~"restaurant|cafe|bar"]["outdoor_seating:type"]({s},{w},{n},{e});
-        );
-        out tags center;
-        """
-
-        data = _overpass(query)
-        elements = data.get("elements", [])
-
-        if not elements:
-            return self._empty_result(detail="No restaurants with outdoor seating tagged in OSM")
-
-        # For commercial signals, the "property" is actually each restaurant found
-        name = ""
-        for el in elements:
-            tags = el.get("tags", {})
-            if tags.get("name"):
-                name = tags["name"]
-                break
-
-        score = 1.0 if len(elements) >= 3 else 0.7
-        return {
-            "layer":  self.name,
-            "label":  self.label,
-            "signal": True,
-            "score":  score,
-            "detail": f"{len(elements)} restaurant(s) with outdoor seating in area",
-            "data":   {
-                "restaurants_found": len(elements),
-                "sample_name": name[:60],
-            },
-            "paid":   self.paid,
-        }
+        if has_outdoor:
+            return {
+                "layer":  self.name,
+                "label":  self.label,
+                "signal": True,
+                "score":  1.0,
+                "detail": f"{name} — has outdoor seating (maintenance contract opportunity)",
+                "data":   {"restaurant_name": name[:60], "has_outdoor_seating": True},
+                "paid":   self.paid,
+            }
+        else:
+            # Restaurant without outdoor seating tagged — still a potential lead
+            return {
+                "layer":  self.name,
+                "label":  self.label,
+                "signal": True,
+                "score":  0.5,
+                "detail": f"{name} — restaurant without confirmed outdoor seating",
+                "data":   {"restaurant_name": name[:60], "has_outdoor_seating": False},
+                "paid":   self.paid,
+            }
