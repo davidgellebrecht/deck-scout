@@ -353,14 +353,7 @@ hr {
     50%       { box-shadow: 0 0 0 6px rgba(183,28,28,0); }
 }
 
-/* ── Hero image strip ── */
-[data-testid="stImage"] img {
-    object-fit: cover;
-    height: 200px;
-    width: 100%;
-    display: block;
-    border-radius: 4px;
-}
+/* ── Images ── */
 [data-testid="stImage"] {
     padding: 0 !important;
     margin: 0 !important;
