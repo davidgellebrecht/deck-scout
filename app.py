@@ -725,7 +725,7 @@ with _logo_col:
         st.image("assets/wcd_logo.png", width=160)
 with _title_col:
     st.markdown("# Deck Scout")
-    st.markdown("*Residential deck opportunity intelligence — San Diego County*")
+    st.markdown("*West Coast Deck — BD Opportunity Intelligence — San Diego County*")
 
 st.markdown("---")
 
