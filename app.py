@@ -32,9 +32,6 @@ from rank import (
     signals_fired_list,
 )
 
-# ── Demo mode ────────────────────────────────────────────────────────────────
-DEMO_MODE = True
-
 # ── Pro access ───────────────────────────────────────────────────────────────
 # Set PRO_ACCESS = "true" in Streamlit Secrets to unlock all features.
 # Without it, users get a limited demo (Imperial Beach only, 3 results max).
@@ -717,57 +714,13 @@ def build_rankings_df(properties: list) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── Header ───────────────────────────────────────────────────────────────────
-_logo_col, _spacer = st.columns([1, 3])
+_logo_col, _title_col = st.columns([1, 3])
 with _logo_col:
     if os.path.exists("assets/wcd_logo.png"):
         st.image("assets/wcd_logo.png", width=160)
-
-if DEMO_MODE:
-    _h_left, _h_right = st.columns([2, 1])
-    with _h_left:
-        st.markdown("# Deck Scout")
-        st.markdown("*Residential deck opportunity intelligence — San Diego County*")
-    with _h_right:
-        st.markdown('<div class="demo-marker"></div>', unsafe_allow_html=True)
-        demo_btn = st.button(
-            "DEMO - WCD",
-            key="demo_wcd_btn",
-            use_container_width=True,
-        )
-else:
+with _title_col:
     st.markdown("# Deck Scout")
     st.markdown("*Residential deck opportunity intelligence — San Diego County*")
-    demo_btn = False
-
-# ── Demo preset ──────────────────────────────────────────────────────────────
-if demo_btn:
-    st.session_state["city_select"] = "Imperial Beach (DEMO)"
-    # Hard filters — all ON
-    for fm in FILTER_META:
-        st.session_state[f"filter_{fm['key']}"] = True
-    # Free signals — all ON
-    for sm in SIGNAL_META:
-        if not sm["paid"]:
-            st.session_state[f"sig_{sm['key']}"] = True
-    # Premium — OFF
-    for sm in SIGNAL_META:
-        if sm["paid"]:
-            st.session_state[f"sig_{sm['key']}"] = False
-    st.session_state["demo_run_trigger"] = True
-    st.rerun()
-
-# ── Hero image strip ─────────────────────────────────────────────────────────
-# Placeholder images — replace with actual deck photos
-HERO_IMAGES = []
-hero_dir = "assets"
-if os.path.isdir(hero_dir):
-    imgs = sorted(f for f in os.listdir(hero_dir) if f.lower().endswith(('.webp', '.jpg', '.jpeg', '.png')))
-    HERO_IMAGES = [os.path.join(hero_dir, f) for f in imgs[:4]]
-
-if HERO_IMAGES:
-    img_cols = st.columns(len(HERO_IMAGES), gap="small")
-    for col, path in zip(img_cols, HERO_IMAGES):
-        col.image(path, use_container_width=True)
 
 st.markdown("---")
 
@@ -949,8 +902,7 @@ if st.session_state.get("scan_time"):
 run_btn = st.button("Run Deck Scout Scan", type="primary", use_container_width=True)
 
 # ── Trigger scan ─────────────────────────────────────────────────────────────
-_demo_trigger = st.session_state.pop("demo_run_trigger", False)
-if run_btn or _demo_trigger:
+if run_btn:
     st.session_state.scan_log  = []
     st.session_state.scan_city = config.CITY
     t0 = time.time()
