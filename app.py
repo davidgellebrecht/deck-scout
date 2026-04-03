@@ -689,7 +689,10 @@ def build_rankings_df(properties: list) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── Header ───────────────────────────────────────────────────────────────────
-st.markdown('<span class="wcd-label">West Coast Deck</span>', unsafe_allow_html=True)
+_logo_col, _spacer = st.columns([1, 3])
+with _logo_col:
+    if os.path.exists("assets/wcd_logo.png"):
+        st.image("assets/wcd_logo.png", width=160)
 
 if DEMO_MODE:
     _h_left, _h_right = st.columns([2, 1])
@@ -1175,6 +1178,10 @@ else:
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
+_fc1, _fc2, _fc3 = st.columns([2, 1, 2])
+with _fc2:
+    if os.path.exists("assets/wcd_logo.png"):
+        st.image("assets/wcd_logo.png", width=100)
 st.markdown(
     '<p style="font-family:Poppins,sans-serif;font-size:0.8rem;'
     'color:#7A8A9D;text-align:center;letter-spacing:0.04em;">'
