@@ -44,32 +44,48 @@ class SafetyViolationLayer(BaseLayer):
         months = config.CODE_ENFORCEMENT_MONTHS
         cutoff = (date.today() - timedelta(days=months * 30)).isoformat()
 
+        # Query Socrata for code enforcement cases with pagination and bbox
+        s, w, n, e = config.CITY_BBOX
+        bbox_filter = (
+            f"latitude >= {s} AND latitude <= {n} AND "
+            f"longitude >= {w} AND longitude <= {e}"
+        )
+        cases = []
+        offset = 0
+        page_size = 1000
         try:
-            params = {
-                "$where": (
-                    f"date_case_created >= '{cutoff}' AND "
-                    f"("
-                    f"upper(case_type) like '%DECK%' OR "
-                    f"upper(case_type) like '%BALCON%' OR "
-                    f"upper(case_type) like '%STAIR%' OR "
-                    f"upper(case_type) like '%UNSAFE%' OR "
-                    f"upper(case_type) like '%STRUCT%' OR "
-                    f"upper(case_type) like '%HABITAB%' OR "
-                    f"upper(violation_name) like '%DECK%' OR "
-                    f"upper(violation_name) like '%BALCON%' OR "
-                    f"upper(violation_name) like '%STAIR%' OR "
-                    f"upper(violation_name) like '%ROT%'"
-                    f")"
-                ),
-                "$limit": 100,
-            }
-            resp = req_lib.get(
-                config.SD_OPEN_DATA_CODE_ENFORCEMENT,
-                params=params,
-                timeout=15,
-            )
-            resp.raise_for_status()
-            cases = resp.json()
+            while True:
+                params = {
+                    "$where": (
+                        f"date_case_created >= '{cutoff}' AND "
+                        f"{bbox_filter} AND "
+                        f"("
+                        f"upper(case_type) like '%DECK%' OR "
+                        f"upper(case_type) like '%BALCON%' OR "
+                        f"upper(case_type) like '%STAIR%' OR "
+                        f"upper(case_type) like '%UNSAFE%' OR "
+                        f"upper(case_type) like '%STRUCT%' OR "
+                        f"upper(case_type) like '%HABITAB%' OR "
+                        f"upper(violation_name) like '%DECK%' OR "
+                        f"upper(violation_name) like '%BALCON%' OR "
+                        f"upper(violation_name) like '%STAIR%' OR "
+                        f"upper(violation_name) like '%ROT%'"
+                        f")"
+                    ),
+                    "$limit": page_size,
+                    "$offset": offset,
+                }
+                resp = req_lib.get(
+                    config.SD_OPEN_DATA_CODE_ENFORCEMENT,
+                    params=params,
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                page = resp.json()
+                cases.extend(page)
+                if len(page) < page_size:
+                    break
+                offset += page_size
         except Exception as e:
             return self._empty_result(detail=f"Code enforcement query failed: {e}")
 

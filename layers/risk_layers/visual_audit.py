@@ -70,16 +70,10 @@ class VisualAuditLayer(BaseLayer):
         elements = data.get("elements", [])
 
         if not elements:
-            # No OSM data = unknown condition — still a potential lead
-            return {
-                "layer":  self.name,
-                "label":  self.label,
-                "signal": True,
-                "score":  0.3,
-                "detail": "No building material data in OSM — unknown deck condition (potential lead)",
-                "data":   {"osm_elements_found": 0, "has_wood_tags": False},
-                "paid":   self.paid,
-            }
+            # No OSM data = no signal (can't confirm deck condition)
+            return self._empty_result(
+                detail="No building material data in OSM — insufficient data to assess"
+            )
 
         # Analyse found elements
         has_wood = False

@@ -45,24 +45,40 @@ class DeckPermitAgeLayer(BaseLayer):
         cutoff_year = date.today().year - min_age
         radius = config.PERMIT_SEARCH_RADIUS_M
 
+        # Query Socrata for old deck permits with pagination and bbox
+        s, w, n, e = config.CITY_BBOX
+        bbox_filter = (
+            f"latitude >= {s} AND latitude <= {n} AND "
+            f"longitude >= {w} AND longitude <= {e}"
+        )
+        permits = []
+        offset = 0
+        page_size = 1000
         try:
-            params = {
-                "$where": (
-                    f"approval_date <= '{cutoff_year}-12-31' AND "
-                    f"("
-                    f"upper(description) like '%DECK%' OR "
-                    f"upper(description) like '%PATIO%' OR "
-                    f"upper(description) like '%BALCON%' OR "
-                    f"upper(description) like '%PORCH%' OR "
-                    f"upper(description) like '%STAIR%'"
-                    f")"
-                ),
-                "$limit": 100,
-                "$order": "approval_date ASC",
-            }
-            resp = requests.get(config.SD_OPEN_DATA_PERMITS, params=params, timeout=15)
-            resp.raise_for_status()
-            permits = resp.json()
+            while True:
+                params = {
+                    "$where": (
+                        f"approval_date <= '{cutoff_year}-12-31' AND "
+                        f"{bbox_filter} AND "
+                        f"("
+                        f"upper(description) like '%DECK%' OR "
+                        f"upper(description) like '%PATIO%' OR "
+                        f"upper(description) like '%BALCON%' OR "
+                        f"upper(description) like '%PORCH%' OR "
+                        f"upper(description) like '%STAIR%'"
+                        f")"
+                    ),
+                    "$limit": page_size,
+                    "$offset": offset,
+                    "$order": "approval_date ASC",
+                }
+                resp = requests.get(config.SD_OPEN_DATA_PERMITS, params=params, timeout=15)
+                resp.raise_for_status()
+                page = resp.json()
+                permits.extend(page)
+                if len(page) < page_size:
+                    break
+                offset += page_size
         except Exception as e:
             return self._empty_result(detail=f"Permit query failed: {e}")
 

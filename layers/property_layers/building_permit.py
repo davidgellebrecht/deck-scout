@@ -44,24 +44,39 @@ class BuildingPermitLayer(BaseLayer):
         cutoff = (date.today() - timedelta(days=config.PERMIT_LOOKBACK_DAYS)).isoformat()
         radius = config.PERMIT_SEARCH_RADIUS_M
 
-        # Query Socrata for pool/spa permits
+        # Query Socrata for pool/spa permits with pagination
+        s, w, n, e = config.CITY_BBOX
+        bbox_filter = (
+            f"latitude >= {s} AND latitude <= {n} AND "
+            f"longitude >= {w} AND longitude <= {e}"
+        )
+        permits = []
+        offset = 0
+        page_size = 1000
         try:
-            params = {
-                "$where": (
-                    f"approval_date >= '{cutoff}' AND "
-                    f"("
-                    f"upper(description) like '%POOL%' OR "
-                    f"upper(description) like '%SPA%' OR "
-                    f"upper(description) like '%SWIM%' OR "
-                    f"upper(description) like '%HOT TUB%' OR "
-                    f"upper(description) like '%OUTDOOR KITCHEN%'"
-                    f")"
-                ),
-                "$limit": 100,
-            }
-            resp = requests.get(config.SD_OPEN_DATA_PERMITS, params=params, timeout=15)
-            resp.raise_for_status()
-            permits = resp.json()
+            while True:
+                params = {
+                    "$where": (
+                        f"approval_date >= '{cutoff}' AND "
+                        f"{bbox_filter} AND "
+                        f"("
+                        f"upper(description) like '%POOL%' OR "
+                        f"upper(description) like '%SPA%' OR "
+                        f"upper(description) like '%SWIM%' OR "
+                        f"upper(description) like '%HOT TUB%' OR "
+                        f"upper(description) like '%OUTDOOR KITCHEN%'"
+                        f")"
+                    ),
+                    "$limit": page_size,
+                    "$offset": offset,
+                }
+                resp = requests.get(config.SD_OPEN_DATA_PERMITS, params=params, timeout=15)
+                resp.raise_for_status()
+                page = resp.json()
+                permits.extend(page)
+                if len(page) < page_size:
+                    break
+                offset += page_size
         except Exception as e:
             return self._empty_result(detail=f"Permit query failed: {e}")
 

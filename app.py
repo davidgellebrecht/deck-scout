@@ -607,10 +607,20 @@ def run_full_scan(filter_state: dict, signal_state: dict) -> list:
             st.session_state.scan_log.append(f"  -> {len(properties)} demo properties loaded")
             return properties
 
-    st.session_state.scan_log.append("Querying OpenStreetMap for residential properties...")
+    # Fetch residential parcels from SanGIS/SANDAG
+    st.session_state.scan_log.append("Querying SanGIS/SANDAG for residential parcels...")
     properties = fetch_residential_properties()
+    st.session_state.scan_log.append(f"  -> {len(properties):,} parcels retrieved from SANDAG")
+
+    # Fetch commercial properties (restaurants with outdoor seating) from OSM
+    prop_type_filter = filter_state.get("property_type", "All")
+    if prop_type_filter in ("All", "Commercial"):
+        st.session_state.scan_log.append("Querying OpenStreetMap for restaurants with outdoor seating...")
+        commercial = fetch_commercial_properties()
+        properties.extend(commercial)
+        st.session_state.scan_log.append(f"  -> {len(commercial)} restaurant(s) found in OSM")
+
     st.session_state.total_raw = len(properties)
-    st.session_state.scan_log.append(f"  -> {len(properties):,} properties retrieved from OSM")
 
     st.session_state.scan_log.append("Applying hard filters...")
     properties, skipped = filter_properties(properties)
@@ -618,7 +628,7 @@ def run_full_scan(filter_state: dict, signal_state: dict) -> list:
         f"  -> {len(properties)} passed  |  "
         f"value: {skipped['property_value']}  |  "
         f"lot: {skipped['lot_size']}  |  "
-        f"type: {skipped['not_single_family']}  |  "
+        f"type: {skipped['property_type']}  |  "
         f"new: {skipped['new_construction']}"
     )
 
