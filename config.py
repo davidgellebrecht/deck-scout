@@ -59,7 +59,12 @@ CALFIRE_FHSZ_GEOJSON = "data/sd_county_fhsz.geojson"
 # SAM.gov — federal contract opportunities (no key required)
 SAM_GOV_API = "https://api.sam.gov/opportunities/v2/search"
 
-# ─── Overpass API (OSM) ─────────────────────────────────────────────────────
+# ─── SanGIS / SANDAG — Primary parcel data (FREE, no key) ───────────────────
+SANDAG_PARCELS_URL = "https://geo.sandag.org/server/rest/services/Hosted/Parcels/FeatureServer/0/query"
+SANGIS_MAX_RECORDS  = 2000   # ArcGIS REST limit per query (paginate if needed)
+SANGIS_TIMEOUT      = 30     # seconds per request
+
+# ─── Overpass API (OSM) — used for commercial/restaurant data only ──────────
 OVERPASS_FALLBACK_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
