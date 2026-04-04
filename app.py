@@ -500,6 +500,38 @@ SIGNAL_META = [
         "desc":   "Queries OpenStreetMap for building material tags (wood, timber), deck/patio features, and construction dates. Free alternative to Street View AI — detects properties with likely aging wood decks.",
     },
     {
+        "key":    "layer_sb326_compliance_signal",
+        "label":  "SB-326 Compliance",
+        "group":  "residential",
+        "config": "sb326_compliance",
+        "paid":   False,
+        "desc":   "California SB-326 (condos/HOAs) and SB-721 (apartments) require balcony/deck inspections for all multi-family buildings. First deadline was Jan 1, 2025 — already passed. Non-compliant buildings face legal liability. A single condo complex contract = $50K-200K+.",
+    },
+    {
+        "key":    "layer_neighbor_effect_signal",
+        "label":  "Neighbor Effect",
+        "group":  "residential",
+        "config": "neighbor_effect",
+        "paid":   False,
+        "desc":   "When one house on a street gets a new deck, neighbors follow within 12-18 months. Detects recent deck permits on nearby properties — social proof that deck improvements are happening in the area.",
+    },
+    {
+        "key":    "layer_flip_activity_signal",
+        "label":  "Flip Activity",
+        "group":  "residential",
+        "config": "flip_activity",
+        "paid":   False,
+        "desc":   "Properties bought recently (≤180 days) with old year-built (15+ years) are likely being flipped. Flippers always invest in outdoor improvements and work on tight timelines — receptive to deck proposals.",
+    },
+    {
+        "key":    "layer_hardscape_conversion_signal",
+        "label":  "Hardscape Conversion",
+        "group":  "residential",
+        "config": "hardscape_conversion",
+        "paid":   False,
+        "desc":   "Homeowners converting lawns to drought-resistant hardscape often add or expand deck/patio areas at the same time. San Diego's water restrictions make this increasingly common.",
+    },
+    {
         "key":    "layer_outdoor_seating_signal",
         "label":  "Outdoor Seating",
         "group":  "commercial",
@@ -567,25 +599,101 @@ LAYER_CRED = {
 
 # ── Score helpers ────────────────────────────────────────────────────────────
 
+def _signal_config_key(signal_key: str) -> str:
+    """Extract the config key from a signal key like 'layer_new_owner_signal' -> 'new_owner'."""
+    return signal_key.replace("layer_", "").replace("_signal", "")
+
+
 def rescore(properties: list, active_keys: list) -> list:
-    total = len(active_keys)
+    """Weighted scoring using signal weights * layer confidence scores + seasonal boost."""
+    from datetime import datetime
+    month = datetime.now().month
+    seasonal = config.SEASONAL_MULTIPLIERS.get(month, 1.0)
+
+    max_possible = sum(
+        config.SIGNAL_WEIGHTS.get(_signal_config_key(k), 1.0)
+        for k in active_keys
+    )
+
     result = []
     for p in properties:
         p = dict(p)
-        fired = sum(1 for k in active_keys if p.get(k)) if total else 0
-        p["opportunity_score"] = round((fired / total) * 100, 1) if total else 0.0
-        p["signals_fired"]     = fired
-        p["signals_total"]     = total
+        weighted_sum = 0.0
+        fired_count = 0
+        for k in active_keys:
+            if p.get(k):
+                fired_count += 1
+                cfg_key = _signal_config_key(k)
+                weight = config.SIGNAL_WEIGHTS.get(cfg_key, 1.0)
+                # Use the layer's confidence score (0-1) as a multiplier
+                score_key = k.replace("_signal", "_score")
+                layer_score = p.get(score_key)
+                confidence = float(layer_score) if layer_score is not None else 1.0
+                # Apply seasonal multiplier (exempt for compliance signals)
+                mult = 1.0 if cfg_key in config.SEASONAL_EXEMPT_SIGNALS else seasonal
+                weighted_sum += weight * confidence * mult
+
+        raw_score = round((weighted_sum / max_possible) * 100, 1) if max_possible else 0.0
+        p["opportunity_score"] = min(raw_score, 100.0)
+        p["signals_fired"]     = fired_count
+        p["signals_total"]     = len(active_keys)
+        # Lead tier
+        if p["opportunity_score"] >= 40:
+            p["lead_tier"] = "Hot"
+        elif p["opportunity_score"] >= 20:
+            p["lead_tier"] = "Warm"
+        else:
+            p["lead_tier"] = "Cold"
         result.append(p)
     return sorted(result, key=lambda x: x["opportunity_score"], reverse=True)
 
 
 def score_color(score: float) -> str:
-    if score >= 30:
-        return "#2E7D32"
-    if score >= 15:
-        return "#C0833E"
-    return "#7A8A9D"
+    if score >= 40:
+        return "#B71C1C"  # red for hot leads
+    if score >= 20:
+        return "#C0833E"  # amber for warm
+    return "#7A8A9D"      # grey for cold
+
+
+def lead_tier_badge(tier: str) -> str:
+    """Return HTML badge for lead tier."""
+    colors = {
+        "Hot":  ("🔥", "#B71C1C", "#FFEBEE"),
+        "Warm": ("☀️", "#C0833E", "#FFF8E1"),
+        "Cold": ("❄️", "#7A8A9D", "#ECEFF1"),
+    }
+    icon, text_color, bg_color = colors.get(tier, colors["Cold"])
+    return (
+        f'<span style="display:inline-block;background:{bg_color};color:{text_color};'
+        f'font-family:Poppins,sans-serif;font-size:0.6rem;font-weight:700;'
+        f'padding:2px 8px;border-radius:3px;letter-spacing:0.08em;'
+        f'text-transform:uppercase;">{icon} {tier} Lead</span>'
+    )
+
+
+def estimate_deck_size(p: dict) -> tuple:
+    """Estimate deck size range and project value from lot and living area."""
+    lot = p.get("lot_sqft") or 0
+    living = p.get("living_area_sqft") or 0
+    if not lot or lot < 500:
+        return None, None, None, None
+
+    available = max(lot - living - config.DRIVEWAY_ESTIMATE_SQFT, 0)
+    if p.get("has_pool"):
+        available = max(available - 400, 0)  # pool takes space but boosts deck need
+
+    low_sqft = max(int(available * config.DECK_RATIO_LOW), 80)
+    high_sqft = max(int(available * config.DECK_RATIO_HIGH), 150)
+
+    # Cap at reasonable sizes
+    low_sqft = min(low_sqft, 800)
+    high_sqft = min(high_sqft, 1500)
+
+    low_val = low_sqft * config.DECK_COST_PER_SQFT_LOW
+    high_val = high_sqft * config.DECK_COST_PER_SQFT_HIGH
+
+    return low_sqft, high_sqft, low_val, high_val
 
 
 # ── Pipeline runner ──────────────────────────────────────────────────────────
@@ -1018,7 +1126,30 @@ else:
         json_data = json.dumps(properties, indent=2, default=str).encode("utf-8")
         ts        = datetime.now().strftime("%Y%m%d_%H%M")
 
-        ec1, ec2, _ = st.columns([1, 1, 4])
+        # Build mailing list CSV
+        mail_rows = []
+        for p in properties:
+            addr = p.get("address", "")
+            # Parse address components
+            parts = addr.split(",")
+            street = parts[0].strip() if parts else ""
+            city_zip = parts[1].strip() if len(parts) > 1 else ""
+            city_parts = city_zip.split()
+            zipcode = city_parts[-1] if city_parts and city_parts[-1].isdigit() else ""
+            city_name = " ".join(city_parts[:-1]) if zipcode else city_zip
+            mail_rows.append({
+                "Name": "Current Resident",
+                "Address": street,
+                "City": city_name,
+                "State": "CA",
+                "ZIP": zipcode,
+                "Lead Tier": p.get("lead_tier", ""),
+                "Score": p.get("opportunity_score", 0),
+                "Top Signal": (signals_fired_list(p) or ["—"])[0],
+            })
+        mail_csv = pd.DataFrame(mail_rows).to_csv(index=False).encode("utf-8")
+
+        ec1, ec2, ec3, _ = st.columns([1, 1, 1, 3])
         ec1.download_button(
             "Export CSV",
             csv_data,
@@ -1030,6 +1161,12 @@ else:
             json_data,
             file_name=f"deck_scout_{ts}.json",
             mime="application/json",
+        )
+        ec3.download_button(
+            "Mailing List",
+            mail_csv,
+            file_name=f"deck_scout_mailing_{ts}.csv",
+            mime="text/csv",
         )
     else:
         st.markdown(
@@ -1140,31 +1277,56 @@ else:
                         f'</div></a>',
                         unsafe_allow_html=True,
                     )
+                    tier = p.get("lead_tier", "Cold")
+                    tier_html = lead_tier_badge(tier)
                     st.markdown(
                         f'<div style="padding:0.6rem 0 0.4rem;border-bottom:1px solid #D6D0C4;">'
+                        f'{tier_html}'
                         f'<div style="font-family:Poppins,sans-serif;font-size:0.56rem;font-weight:700;'
-                        f'letter-spacing:0.14em;text-transform:uppercase;color:{score_clr};margin-bottom:0.15rem;">'
+                        f'letter-spacing:0.14em;text-transform:uppercase;color:{score_clr};margin:0.3rem 0 0.15rem;">'
                         f'Score {score:.0f}% ({p.get("signals_fired",0)} of {p.get("signals_total", n_active)})</div>'
                         f'<div style="font-family:Poppins,sans-serif;font-weight:600;font-size:0.9rem;'
                         f'color:#1B2A4A;line-height:1.25;">{address[:55]}</div>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
-                    # Key Intel table
+                    # Key Intel table — expanded with all available fields
                     year_str = str(year) if year else "—"
+                    lot_str = f"{p.get('lot_sqft'):,} sqft" if p.get("lot_sqft") else "—"
+                    val_str = f"${p.get('assessed_value'):,}" if p.get("assessed_value") else "—"
+                    bed_bath = ""
+                    beds = str(p.get("bedrooms", "")).strip().lstrip("0")
+                    baths_val = str(p.get("baths", "")).strip().lstrip("0")
+                    if beds or baths_val:
+                        bed_bath = f"{beds or '—'} bed / {baths_val or '—'} bath"
+                    else:
+                        bed_bath = "—"
+                    pool_str = "Yes" if p.get("has_pool") else "No"
+
+                    # Deck size estimate
+                    deck_lo, deck_hi, val_lo, val_hi = estimate_deck_size(p)
+                    if deck_lo and deck_hi:
+                        deck_str = f"{deck_lo:,}-{deck_hi:,} sqft"
+                        proj_str = f"${val_lo:,}-${val_hi:,}"
+                    else:
+                        deck_str = "—"
+                        proj_str = "—"
+
+                    td_l = 'style="padding:2px 4px;color:#7A8A9D;"'
+                    td_r = 'style="padding:2px 0;text-align:right;font-weight:500;"'
                     st.markdown(
                         f'<div style="padding:0.5rem 0;border-bottom:1px solid #D6D0C4;">'
                         f'<div style="font-family:Poppins,sans-serif;font-size:0.52rem;font-weight:700;'
                         f'letter-spacing:0.16em;text-transform:uppercase;color:#C0833E;margin-bottom:0.3rem;">Key Intel</div>'
                         f'<table style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif;'
                         f'font-size:0.72rem;color:#1B2A4A;">'
-                        f'<tr><td style="padding:2px 4px;color:#7A8A9D;">Year Built</td>'
-                        f'<td style="padding:2px 0;text-align:right;font-weight:500;">{year_str}</td></tr>'
-                        f'<tr><td style="padding:2px 4px;color:#7A8A9D;">Type</td>'
-                        f'<td style="padding:2px 0;text-align:right;font-weight:500;">{btype}</td></tr>'
-                        f'<tr><td style="padding:2px 4px;color:#7A8A9D;">Material</td>'
-                        f'<td style="padding:2px 0;text-align:right;font-weight:500;">'
-                        f'{(p.get("material") or "—").title()}</td></tr>'
+                        f'<tr><td {td_l}>Year Built</td><td {td_r}>{year_str}</td></tr>'
+                        f'<tr><td {td_l}>Lot Size</td><td {td_r}>{lot_str}</td></tr>'
+                        f'<tr><td {td_l}>Assessed</td><td {td_r}>{val_str}</td></tr>'
+                        f'<tr><td {td_l}>Bed / Bath</td><td {td_r}>{bed_bath}</td></tr>'
+                        f'<tr><td {td_l}>Pool</td><td {td_r}>{pool_str}</td></tr>'
+                        f'<tr><td {td_l}>Est. Deck</td><td {td_r}>{deck_str}</td></tr>'
+                        f'<tr><td {td_l}>Project Value</td><td {td_r}>{proj_str}</td></tr>'
                         f'</table></div>',
                         unsafe_allow_html=True,
                     )

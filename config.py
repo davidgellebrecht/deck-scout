@@ -30,19 +30,61 @@ STALE_LISTING_DAYS      = 60            # "Curb Appeal" minimum days on market
 # ─── Signal Toggles ─────────────────────────────────────────────────────────
 SIGNALS = {
     # Residential — free
-    "new_owner":            True,
-    "building_permit":      True,
-    "deck_permit_age":      True,
-    "aging_neighborhood":   True,
-    "fire_hazard":          True,
-    "safety_violation":     True,
-    "visual_audit":         True,
+    "new_owner":              True,
+    "building_permit":        True,
+    "deck_permit_age":        True,
+    "aging_neighborhood":     True,
+    "fire_hazard":            True,
+    "safety_violation":       True,
+    "visual_audit":           True,
+    "sb326_compliance":       True,
+    "neighbor_effect":        True,
+    "flip_activity":          True,
+    "hardscape_conversion":   True,
     # Commercial — free
-    "outdoor_seating":      True,
-    "municipal_contracts":  True,
+    "outdoor_seating":        True,
+    "municipal_contracts":    True,
     # Premium
-    "curb_appeal":          False,
+    "curb_appeal":            False,
 }
+
+# ─── Signal Weights (for weighted scoring) ──────────────────────────────────
+# Higher weight = stronger buying signal. Used with each layer's 0-1 confidence
+# score to produce a weighted opportunity score.
+SIGNAL_WEIGHTS = {
+    "safety_violation":     3.0,   # owner MUST act — city fines accumulating
+    "sb326_compliance":     3.0,   # legal mandate — inspection deadline passed
+    "fire_hazard":          2.5,   # insurance mandate for non-combustible decking
+    "new_owner":            2.0,   # strongest purchase-intent signal
+    "building_permit":      2.0,   # already in construction mode
+    "municipal_contracts":  2.0,   # high-value government work
+    "flip_activity":        2.0,   # flipper on tight timeline, receptive to bids
+    "deck_permit_age":      1.5,   # aging deck confirmed by permit records
+    "curb_appeal":          1.5,   # stale listing — motivated seller
+    "outdoor_seating":      1.5,   # recurring commercial revenue
+    "neighbor_effect":      1.5,   # social proof — neighbors got new decks
+    "hardscape_conversion": 1.5,   # already doing outdoor work
+    "aging_neighborhood":   1.0,   # statistical — not individually confirmed
+    "visual_audit":         1.0,   # OSM data is sparse in US suburbs
+}
+
+# ─── Seasonal Multiplier ────────────────────────────────────────────────────
+# Homeowners plan deck projects in spring. Compliance signals are year-round.
+SEASONAL_MULTIPLIERS = {
+    1: 1.20, 2: 1.20, 3: 1.20,    # Jan-Mar: planning season
+    4: 1.00, 5: 1.00, 6: 1.00,    # Apr-Jun: peak season
+    7: 0.90, 8: 0.90, 9: 0.90,    # Jul-Sep: winding down
+    10: 0.85, 11: 0.85, 12: 0.85, # Oct-Dec: off season
+}
+# These signals are exempt from seasonal reduction (compliance is year-round):
+SEASONAL_EXEMPT_SIGNALS = {"safety_violation", "fire_hazard"}
+
+# ─── Deck Size Estimation ───────────────────────────────────────────────────
+DECK_COST_PER_SQFT_LOW  = 35    # composite decking low estimate ($/sqft)
+DECK_COST_PER_SQFT_HIGH = 55    # composite decking high estimate ($/sqft)
+DRIVEWAY_ESTIMATE_SQFT  = 400   # typical driveway/garage pad area
+DECK_RATIO_LOW          = 0.15  # min % of available outdoor used for deck
+DECK_RATIO_HIGH         = 0.30  # max % of available outdoor used for deck
 
 # ─── External API Credentials ────────────────────────────────────────────────
 # Curb Appeal layer — Zillow / Redfin via RapidAPI

@@ -54,7 +54,19 @@
     "layer_curb_appeal_signal": false,
     "layer_curb_appeal_score": null,
     "layer_curb_appeal_detail": "PAID FEATURE \u2014 configure credentials in config.py to activate",
-    "layer_curb_appeal_paid": true
+    "layer_curb_appeal_paid": true,
+    "layer_sb326_compliance_signal": false,
+    "layer_sb326_compliance_score": null,
+    "layer_sb326_compliance_detail": "Not a multi-family building \u2014 SB-326/721 does not apply",
+    "layer_neighbor_effect_signal": false,
+    "layer_neighbor_effect_score": null,
+    "layer_neighbor_effect_detail": "No recent deck permits on neighboring properties",
+    "layer_flip_activity_signal": true,
+    "layer_flip_activity_score": 0.7,
+    "layer_flip_activity_detail": "Renovation candidate \u2014 recently purchased, 19 yr old home",
+    "layer_hardscape_conversion_signal": false,
+    "layer_hardscape_conversion_score": null,
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
   },
   {
     "lat": 32.5792,
@@ -111,7 +123,19 @@
     "layer_curb_appeal_signal": false,
     "layer_curb_appeal_score": null,
     "layer_curb_appeal_detail": "PAID FEATURE \u2014 configure credentials in config.py to activate",
-    "layer_curb_appeal_paid": true
+    "layer_curb_appeal_paid": true,
+    "layer_sb326_compliance_signal": false,
+    "layer_sb326_compliance_score": null,
+    "layer_sb326_compliance_detail": "Not a multi-family building \u2014 SB-326/721 does not apply",
+    "layer_neighbor_effect_signal": true,
+    "layer_neighbor_effect_score": 0.7,
+    "layer_neighbor_effect_detail": "2 neighbor(s) got deck work recently \u2014 closest 85m away",
+    "layer_flip_activity_signal": false,
+    "layer_flip_activity_score": null,
+    "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
+    "layer_hardscape_conversion_signal": false,
+    "layer_hardscape_conversion_score": null,
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
   },
   {
     "lat": 32.5765,
@@ -167,7 +191,19 @@
     "layer_curb_appeal_signal": false,
     "layer_curb_appeal_score": null,
     "layer_curb_appeal_detail": "PAID FEATURE \u2014 configure credentials in config.py to activate",
-    "layer_curb_appeal_paid": true
+    "layer_curb_appeal_paid": true,
+    "layer_sb326_compliance_signal": false,
+    "layer_sb326_compliance_score": null,
+    "layer_sb326_compliance_detail": "Not a multi-family building \u2014 SB-326/721 does not apply",
+    "layer_neighbor_effect_signal": false,
+    "layer_neighbor_effect_score": null,
+    "layer_neighbor_effect_detail": "No recent deck permits on neighboring properties",
+    "layer_flip_activity_signal": true,
+    "layer_flip_activity_score": 0.7,
+    "layer_flip_activity_detail": "Renovation candidate \u2014 recently purchased, 17 yr old home",
+    "layer_hardscape_conversion_signal": false,
+    "layer_hardscape_conversion_score": null,
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
   },
   {
     "lat": 32.581,
@@ -217,7 +253,19 @@
     "layer_curb_appeal_signal": false,
     "layer_curb_appeal_score": null,
     "layer_curb_appeal_detail": "PAID FEATURE \u2014 configure credentials in config.py to activate",
-    "layer_curb_appeal_paid": true
+    "layer_curb_appeal_paid": true,
+    "layer_sb326_compliance_signal": false,
+    "layer_sb326_compliance_score": null,
+    "layer_sb326_compliance_detail": "Not a multi-family building \u2014 SB-326/721 does not apply",
+    "layer_neighbor_effect_signal": false,
+    "layer_neighbor_effect_score": null,
+    "layer_neighbor_effect_detail": "No recent deck permits on neighboring properties",
+    "layer_flip_activity_signal": false,
+    "layer_flip_activity_score": null,
+    "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
+    "layer_hardscape_conversion_signal": false,
+    "layer_hardscape_conversion_score": null,
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
   },
   {
     "lat": 32.5855,
@@ -272,7 +320,19 @@
     "layer_curb_appeal_signal": false,
     "layer_curb_appeal_score": null,
     "layer_curb_appeal_detail": "PAID FEATURE \u2014 configure credentials in config.py to activate",
-    "layer_curb_appeal_paid": true
+    "layer_curb_appeal_paid": true,
+    "layer_sb326_compliance_signal": false,
+    "layer_sb326_compliance_score": null,
+    "layer_sb326_compliance_detail": "Not a multi-family building \u2014 SB-326/721 does not apply",
+    "layer_neighbor_effect_signal": false,
+    "layer_neighbor_effect_score": null,
+    "layer_neighbor_effect_detail": "No recent deck permits on neighboring properties",
+    "layer_flip_activity_signal": false,
+    "layer_flip_activity_score": null,
+    "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
+    "layer_hardscape_conversion_signal": false,
+    "layer_hardscape_conversion_score": null,
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
   },
   {
     "lat": 32.5778,
@@ -329,7 +389,19 @@
     "layer_curb_appeal_signal": false,
     "layer_curb_appeal_score": null,
     "layer_curb_appeal_detail": "PAID FEATURE \u2014 configure credentials in config.py to activate",
-    "layer_curb_appeal_paid": true
+    "layer_curb_appeal_paid": true,
+    "layer_sb326_compliance_signal": false,
+    "layer_sb326_compliance_score": null,
+    "layer_sb326_compliance_detail": "Not a multi-family building \u2014 SB-326/721 does not apply",
+    "layer_neighbor_effect_signal": false,
+    "layer_neighbor_effect_score": null,
+    "layer_neighbor_effect_detail": "No recent deck permits on neighboring properties",
+    "layer_flip_activity_signal": false,
+    "layer_flip_activity_score": null,
+    "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
+    "layer_hardscape_conversion_signal": false,
+    "layer_hardscape_conversion_score": null,
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
   },
   {
     "lat": 32.5825,
@@ -380,7 +452,19 @@
     "layer_curb_appeal_signal": false,
     "layer_curb_appeal_score": null,
     "layer_curb_appeal_detail": "PAID FEATURE \u2014 configure credentials in config.py to activate",
-    "layer_curb_appeal_paid": true
+    "layer_curb_appeal_paid": true,
+    "layer_sb326_compliance_signal": false,
+    "layer_sb326_compliance_score": null,
+    "layer_sb326_compliance_detail": "Not a multi-family building \u2014 SB-326/721 does not apply",
+    "layer_neighbor_effect_signal": false,
+    "layer_neighbor_effect_score": null,
+    "layer_neighbor_effect_detail": "No recent deck permits on neighboring properties",
+    "layer_flip_activity_signal": false,
+    "layer_flip_activity_score": null,
+    "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
+    "layer_hardscape_conversion_signal": false,
+    "layer_hardscape_conversion_score": null,
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
   },
   {
     "lat": 32.5802,
@@ -438,6 +522,18 @@
     "layer_curb_appeal_signal": false,
     "layer_curb_appeal_score": null,
     "layer_curb_appeal_detail": "PAID FEATURE \u2014 configure credentials in config.py to activate",
-    "layer_curb_appeal_paid": true
+    "layer_curb_appeal_paid": true,
+    "layer_sb326_compliance_signal": false,
+    "layer_sb326_compliance_score": null,
+    "layer_sb326_compliance_detail": "Not a multi-family building \u2014 SB-326/721 does not apply",
+    "layer_neighbor_effect_signal": false,
+    "layer_neighbor_effect_score": null,
+    "layer_neighbor_effect_detail": "No recent deck permits on neighboring properties",
+    "layer_flip_activity_signal": true,
+    "layer_flip_activity_score": 0.7,
+    "layer_flip_activity_detail": "Renovation candidate \u2014 recently purchased, 21 yr old home",
+    "layer_hardscape_conversion_signal": false,
+    "layer_hardscape_conversion_score": null,
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
   }
 ]
