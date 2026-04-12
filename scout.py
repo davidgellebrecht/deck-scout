@@ -285,6 +285,7 @@ def fetch_residential_properties() -> list:
             "living_area_sqft": int(living_area) if living_area else 0,
             "has_pool":         has_pool,
             "gps_coordinates":  f"{float(lat):.5f}, {float(lon):.5f}",
+            "parcel_rings":     rings,  # polygon boundary for map display
         }
         properties.append(prop)
 

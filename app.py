@@ -752,6 +752,12 @@ def run_full_scan(filter_state: dict, signal_state: dict) -> list:
 
 # ── Map builder ──────────────────────────────────────────────────────────────
 
+ESRI_TILE_URL = (
+    "https://server.arcgisonline.com/ArcGIS/rest/services/"
+    "World_Imagery/MapServer/tile/{z}/{y}/{x}"
+)
+
+
 def build_map(properties: list) -> folium.Map:
     if not properties:
         return folium.Map(location=[32.7, -117.1], zoom_start=11)
@@ -759,11 +765,24 @@ def build_map(properties: list) -> folium.Map:
     lats   = [p["lat"] for p in properties]
     lons   = [p["lon"] for p in properties]
     center = [sum(lats) / len(lats), sum(lons) / len(lons)]
-    m      = folium.Map(location=center, zoom_start=13, tiles="CartoDB positron")
+
+    # Base map with Esri satellite imagery
+    m = folium.Map(location=center, zoom_start=15, tiles=None)
+    folium.TileLayer(
+        tiles=ESRI_TILE_URL,
+        attr="Esri World Imagery",
+        name="Satellite",
+        overlay=False,
+        control=False,
+    ).add_to(m)
+
+    # Color map for lead tiers
+    tier_colors = {"Hot": "#FF1744", "Warm": "#FF9100", "Cold": "#78909C"}
 
     for p in properties:
         score   = p.get("opportunity_score", 0)
-        color   = "#2E7D32" if score >= 30 else "#C0833E" if score >= 15 else "#9CA3AF"
+        tier    = p.get("lead_tier", "Cold")
+        color   = tier_colors.get(tier, "#78909C")
         address = p.get("address", "")
         signals = signals_fired_list(p)
         sig_html = "".join(
@@ -775,30 +794,55 @@ def build_map(properties: list) -> folium.Map:
 
         year = p.get("year_built", "")
         year_str = f"Built {year}" if year else "Year unknown"
+        val_str = f"${p.get('assessed_value'):,}" if p.get("assessed_value") else ""
+        lot_str = f"{p.get('lot_sqft'):,} sqft" if p.get("lot_sqft") else ""
 
         popup_html = f"""
-        <div style="font-family:'Poppins',sans-serif;min-width:230px;color:#1B2A4A;
+        <div style="font-family:'Poppins',sans-serif;min-width:250px;color:#1B2A4A;
                     background:#F5F5F0;padding:14px;border:1px solid #D6D0C4;border-radius:4px;">
-          <div style="font-size:22px;font-weight:700;color:{color};">{score:.1f}
-            <span style="font-size:12px;color:#7A8A9D;">/100</span>
+          <div style="font-size:20px;font-weight:700;color:{color};">{score:.1f}
+            <span style="font-size:11px;color:#7A8A9D;">/100</span>
+            <span style="font-size:10px;font-weight:600;background:{'#FFEBEE' if tier == 'Hot' else '#FFF8E1' if tier == 'Warm' else '#ECEFF1'};
+              color:{color};padding:2px 6px;border-radius:3px;margin-left:6px;">{tier}</span>
           </div>
-          <div style="font-size:12px;font-weight:500;margin:4px 0 8px;">{address[:50]}</div>
+          <div style="font-size:12px;font-weight:600;margin:6px 0 4px;">{address[:50]}</div>
           <div style="font-size:10px;color:#7A8A9D;margin-bottom:6px;">
             {year_str} &nbsp;·&nbsp; {p.get('building_type','residential').title()}
+            {(' · ' + val_str) if val_str else ''}
+            {(' · ' + lot_str) if lot_str else ''}
           </div>
           <div style="margin-top:8px;">{sig_html}</div>
         </div>
         """
-        folium.CircleMarker(
-            location=[p["lat"], p["lon"]],
-            radius=8 + score / 10,
-            color=color,
-            fill=True,
-            fill_color=color,
-            fill_opacity=0.7,
-            popup=folium.Popup(popup_html, max_width=280),
-            tooltip=f"{score:.1f}/100 — {address[:35]}",
-        ).add_to(m)
+
+        # Draw parcel boundary polygon if rings are available
+        rings = p.get("parcel_rings")
+        if rings:
+            for ring in rings:
+                # ArcGIS gives [lng, lat] but Folium needs [lat, lng]
+                coords = [[pt[1], pt[0]] for pt in ring]
+                folium.Polygon(
+                    locations=coords,
+                    color=color,
+                    weight=3,
+                    fill=True,
+                    fill_color=color,
+                    fill_opacity=0.20,
+                    popup=folium.Popup(popup_html, max_width=300),
+                    tooltip=f"{tier} | {score:.0f}% — {address[:35]}",
+                ).add_to(m)
+        else:
+            # Fallback to circle marker if no polygon data (e.g. demo data, OSM commercial)
+            folium.CircleMarker(
+                location=[p["lat"], p["lon"]],
+                radius=8 + score / 10,
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.5,
+                popup=folium.Popup(popup_html, max_width=300),
+                tooltip=f"{tier} | {score:.0f}% — {address[:35]}",
+            ).add_to(m)
 
     return m
 
