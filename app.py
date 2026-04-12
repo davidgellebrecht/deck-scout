@@ -743,6 +743,10 @@ def run_full_scan(filter_state: dict, signal_state: dict) -> list:
     if not properties:
         return []
 
+    # Share all properties with the Neighbor Effect layer for cross-referencing
+    from layers.property_layers.neighbor_effect import set_scan_properties
+    set_scan_properties(properties)
+
     st.session_state.scan_log.append("Running signal layers...")
     properties = run_all_layers(properties)
     st.session_state.scan_log.append("  -> All layers complete")

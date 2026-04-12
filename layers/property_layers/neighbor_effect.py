@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 """
-Signal 12: Neighbor Effect / Deck Permit Clustering
+Signal 12: Neighbor Effect
 
-When one house on a street gets a new deck, neighbors follow within
-12-18 months ("keeping up with the Joneses"). This layer detects
-RECENT deck permits NEAR the property — the inverse of DeckPermitAge
-(which looks for OLD permits on the SAME property).
+When one house on a street gets improvements, neighbors follow within
+12-18 months. This layer detects clusters of recent home sales nearby —
+a strong proxy for neighborhood renovation activity since new owners
+are the most likely to invest in deck work.
 
-Data: FREE — same Socrata permits API.
+Uses SANDAG parcel data only — no external API calls. The scan passes
+all properties to this layer; it checks for nearby recent sales from
+the same scan batch.
 """
 
 import math
-from datetime import date, timedelta
+from datetime import date
 from layers.base import BaseLayer
-import config
-
-try:
-    import requests
-except ImportError:
-    requests = None
 
 
 def _haversine_m(lat1, lon1, lat2, lon2):
@@ -30,93 +26,90 @@ def _haversine_m(lat1, lon1, lat2, lon2):
     return R * 2 * math.asin(math.sqrt(a))
 
 
+# Module-level cache for all properties in the current scan
+_all_properties = None
+
+
+def set_scan_properties(properties):
+    """Called by the scan pipeline to share all properties with this layer."""
+    global _all_properties
+    _all_properties = properties
+
+
 class NeighborEffectLayer(BaseLayer):
     name  = "neighbor_effect"
     label = "Neighbor Effect"
     paid  = False
 
-    SEARCH_RADIUS_M = 200  # look for permits within 200m
-    LOOKBACK_MONTHS = 18   # recent permits in last 18 months
+    SEARCH_RADIUS_M = 200
+    RECENT_SALE_DAYS = 365  # neighbors who bought within last year
 
     def run(self, prop: dict) -> dict:
-        if not requests:
-            return self._empty_result(detail="requests library not available")
-
         lat = prop.get("lat")
         lon = prop.get("lon")
         if not lat or not lon:
             return self._empty_result(detail="No coordinates available")
 
-        cutoff = (date.today() - timedelta(days=self.LOOKBACK_MONTHS * 30)).isoformat()
-        s, w, n, e = config.CITY_BBOX
-        bbox_filter = (
-            f"latitude >= {s} AND latitude <= {n} AND "
-            f"longitude >= {w} AND longitude <= {e}"
-        )
+        if not _all_properties:
+            return self._empty_result(detail="No scan data available for neighbor analysis")
 
-        try:
-            params = {
-                "$where": (
-                    f"approval_date >= '{cutoff}' AND "
-                    f"{bbox_filter} AND "
-                    f"("
-                    f"upper(description) like '%DECK%' OR "
-                    f"upper(description) like '%PATIO%' OR "
-                    f"upper(description) like '%BALCON%' OR "
-                    f"upper(description) like '%PORCH%'"
-                    f")"
-                ),
-                "$limit": 1000,
-            }
-            resp = requests.get(config.SD_OPEN_DATA_PERMITS, params=params, timeout=15)
-            resp.raise_for_status()
-            permits = resp.json()
-        except Exception as e:
-            return self._empty_result(detail=f"Permit query failed: {e}")
+        today = date.today()
+        nearby_recent = []
 
-        if not permits:
-            return self._empty_result(detail="No recent deck permits in surrounding area")
+        for other in _all_properties:
+            if other is prop:
+                continue
+            olat = other.get("lat")
+            olon = other.get("lon")
+            if not olat or not olon:
+                continue
 
-        # Find permits NEAR this property (but NOT on the same parcel — >30m away)
-        nearby_permits = []
-        for p in permits:
-            plat = p.get("latitude") or p.get("lat")
-            plon = p.get("longitude") or p.get("lon")
-            if not plat or not plon:
+            dist = _haversine_m(lat, lon, olat, olon)
+            if dist > self.SEARCH_RADIUS_M or dist < 10:
+                continue
+
+            # Check if neighbor was recently sold
+            sale_raw = other.get("sale_date")
+            if not sale_raw:
                 continue
             try:
-                dist = _haversine_m(lat, lon, float(plat), float(plon))
+                if isinstance(sale_raw, date):
+                    sale_date = sale_raw
+                else:
+                    sale_date = date.fromisoformat(str(sale_raw)[:10])
+                days_ago = (today - sale_date).days
+                if days_ago <= self.RECENT_SALE_DAYS:
+                    nearby_recent.append({
+                        "address": other.get("address", ""),
+                        "distance_m": round(dist),
+                        "days_ago": days_ago,
+                    })
             except (ValueError, TypeError):
                 continue
-            # Must be nearby (within 200m) but NOT the same parcel (>30m)
-            if 30 < dist <= self.SEARCH_RADIUS_M:
-                nearby_permits.append({"permit": p, "distance_m": dist})
 
-        if not nearby_permits:
-            return self._empty_result(detail="No recent deck permits on neighboring properties")
+        if not nearby_recent:
+            return self._empty_result(detail="No recent home sales on neighboring properties")
 
-        # Score by proximity and count
-        closest = min(nearby_permits, key=lambda x: x["distance_m"])
-        dist = closest["distance_m"]
+        closest = min(nearby_recent, key=lambda x: x["distance_m"])
+        count = len(nearby_recent)
 
-        if dist <= 50 and len(nearby_permits) >= 2:
+        if count >= 3:
             score = 1.0
-        elif dist <= 100:
+        elif count >= 2:
             score = 0.7
         else:
             score = 0.4
 
-        desc = (closest["permit"].get("description") or "Deck permit")[:60]
         return {
             "layer":  self.name,
             "label":  self.label,
             "signal": True,
             "score":  score,
-            "detail": f"{len(nearby_permits)} neighbor(s) got deck work recently — closest {dist:.0f}m away",
+            "detail": f"{count} neighbor(s) recently purchased — renovation activity likely",
             "data":   {
-                "nearby_permits_count": len(nearby_permits),
-                "closest_distance_m": round(dist),
-                "closest_description": desc,
+                "nearby_recent_sales": count,
+                "closest_distance_m": closest["distance_m"],
+                "closest_address": closest["address"][:40],
             },
             "paid":   self.paid,
         }

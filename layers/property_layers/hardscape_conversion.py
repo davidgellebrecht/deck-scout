@@ -1,32 +1,17 @@
 #!/usr/bin/env python3
 """
-Signal 14: Hardscape / Drought-Resistant Conversion
+Signal 14: Hardscape / Drought-Resistant Conversion Candidate
 
-San Diego homeowners converting lawns to drought-resistant hardscape
-often add or expand deck/patio areas at the same time. SD water
-restrictions make this increasingly common.
+San Diego homeowners with large grass lots are prime candidates for
+drought-resistant hardscape conversion — which often includes adding
+or expanding deck/patio areas. SD water restrictions make this common.
 
-Data: FREE — same Socrata permits API.
+Uses SANDAG parcel data only — identifies large lots in areas with
+water restrictions where hardscape + deck projects make sense.
 """
 
-import math
-from datetime import date, timedelta
 from layers.base import BaseLayer
 import config
-
-try:
-    import requests
-except ImportError:
-    requests = None
-
-
-def _haversine_m(lat1, lon1, lat2, lon2):
-    R = 6_371_000.0
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return R * 2 * math.asin(math.sqrt(a))
 
 
 class HardscapeConversionLayer(BaseLayer):
@@ -34,80 +19,66 @@ class HardscapeConversionLayer(BaseLayer):
     label = "Hardscape Conversion"
     paid  = False
 
+    MIN_LOT_SQFT = 5000   # Large enough lot to warrant hardscape project
+    MIN_HOME_AGE = 10     # Older homes more likely to still have original lawns
+
     def run(self, prop: dict) -> dict:
-        if not requests:
-            return self._empty_result(detail="requests library not available")
+        lot_sqft = prop.get("lot_sqft") or 0
+        living_area = prop.get("living_area_sqft") or 0
+        year_built = prop.get("year_built")
 
-        lat = prop.get("lat")
-        lon = prop.get("lon")
-        if not lat or not lon:
-            return self._empty_result(detail="No coordinates available")
-
-        cutoff = (date.today() - timedelta(days=365)).isoformat()
-        radius = config.PERMIT_SEARCH_RADIUS_M
-        s, w, n, e = config.CITY_BBOX
-        bbox_filter = (
-            f"latitude >= {s} AND latitude <= {n} AND "
-            f"longitude >= {w} AND longitude <= {e}"
-        )
-
-        try:
-            params = {
-                "$where": (
-                    f"approval_date >= '{cutoff}' AND "
-                    f"{bbox_filter} AND "
-                    f"("
-                    f"upper(description) like '%LANDSCAPE%' OR "
-                    f"upper(description) like '%HARDSCAPE%' OR "
-                    f"upper(description) like '%DROUGHT%' OR "
-                    f"upper(description) like '%XERISCAPE%' OR "
-                    f"upper(description) like '%PAVER%' OR "
-                    f"upper(description) like '%PATIO COVER%' OR "
-                    f"upper(description) like '%PERGOLA%'"
-                    f")"
-                ),
-                "$limit": 1000,
-            }
-            resp = requests.get(config.SD_OPEN_DATA_PERMITS, params=params, timeout=15)
-            resp.raise_for_status()
-            permits = resp.json()
-        except Exception as e:
-            return self._empty_result(detail=f"Permit query failed: {e}")
-
-        if not permits:
-            return self._empty_result(detail="No recent hardscape/landscaping permits in area")
-
-        # Find closest permit on the same parcel
-        closest_dist = float("inf")
-        closest_permit = None
-        for p in permits:
-            plat = p.get("latitude") or p.get("lat")
-            plon = p.get("longitude") or p.get("lon")
-            if not plat or not plon:
-                continue
-            try:
-                dist = _haversine_m(lat, lon, float(plat), float(plon))
-            except (ValueError, TypeError):
-                continue
-            if dist < closest_dist:
-                closest_dist = dist
-                closest_permit = p
-
-        if closest_dist > radius:
+        if not lot_sqft or lot_sqft < self.MIN_LOT_SQFT:
             return self._empty_result(
-                detail=f"Nearest hardscape permit is {closest_dist:.0f}m away — outside same-parcel radius"
+                detail=f"Lot too small ({lot_sqft:,} sqft) for significant hardscape project"
             )
 
-        desc = (closest_permit or {}).get("description", "Hardscape/landscape permit")[:60]
+        if not year_built:
+            return self._empty_result(detail="No year-built data")
+
+        try:
+            year_built = int(year_built)
+        except (ValueError, TypeError):
+            return self._empty_result(detail="Invalid year-built data")
+
+        from datetime import date
+        age = date.today().year - year_built
+        if age < self.MIN_HOME_AGE:
+            return self._empty_result(
+                detail=f"Home is {age} years old — likely has modern landscaping"
+            )
+
+        # Calculate outdoor space ratio — large outdoor area = more conversion potential
+        if living_area and living_area > 0:
+            outdoor_ratio = (lot_sqft - living_area) / lot_sqft
+        else:
+            outdoor_ratio = 0.7  # assume 70% outdoor if no living area data
+
+        if outdoor_ratio < 0.4:
+            return self._empty_result(
+                detail="Building footprint is too large relative to lot — limited outdoor space"
+            )
+
+        # Score by lot size and outdoor ratio
+        if lot_sqft >= 10000 and outdoor_ratio >= 0.6:
+            score = 1.0
+            detail = f"Large lot ({lot_sqft:,} sqft, {outdoor_ratio:.0%} outdoor) — prime hardscape + deck candidate"
+        elif lot_sqft >= 7000:
+            score = 0.8
+            detail = f"Good-sized lot ({lot_sqft:,} sqft) — strong hardscape conversion potential"
+        else:
+            score = 0.5
+            detail = f"Moderate lot ({lot_sqft:,} sqft) — hardscape conversion possible"
+
         return {
             "layer":  self.name,
             "label":  self.label,
             "signal": True,
-            "score":  0.8,
-            "detail": f"Hardscape conversion in progress — {desc}",
+            "score":  score,
+            "detail": detail,
             "data":   {
-                "permit_distance_m": round(closest_dist),
-                "permit_description": desc,
+                "lot_sqft": lot_sqft,
+                "outdoor_ratio": round(outdoor_ratio, 2),
+                "home_age": age,
             },
             "paid":   self.paid,
         }

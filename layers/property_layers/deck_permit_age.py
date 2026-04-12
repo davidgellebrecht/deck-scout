@@ -1,30 +1,19 @@
 #!/usr/bin/env python3
 """
-Signal 3: Dated Deck Permit
+Signal 3: Dated Deck Permit (by property age)
 
-Checks for deck/patio/balcony permits issued 10+ years ago.
-A permit from 2010 means that deck is now 16 years old — likely needs
-replacement or major repair.
+Properties with aging decks based on year built. Since the SD Open Data
+permit API is unreliable, this layer uses the property's year_built and
+building type to infer deck age — homes built with decks 10+ years ago
+likely need replacement.
+
+This is a more reliable proxy than trying to match individual permits,
+since SANDAG year_built data is comprehensive.
 """
 
-import math
 from datetime import date
 from layers.base import BaseLayer
 import config
-
-try:
-    import requests
-except ImportError:
-    requests = None
-
-
-def _haversine_m(lat1, lon1, lat2, lon2):
-    R = 6_371_000.0
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return R * 2 * math.asin(math.sqrt(a))
 
 
 class DeckPermitAgeLayer(BaseLayer):
@@ -33,104 +22,47 @@ class DeckPermitAgeLayer(BaseLayer):
     paid  = False
 
     def run(self, prop: dict) -> dict:
-        if not requests:
-            return self._empty_result(detail="requests library not available")
+        year_built = prop.get("year_built")
+        if not year_built:
+            return self._empty_result(detail="No year-built data — cannot estimate deck age")
 
-        lat = prop.get("lat")
-        lon = prop.get("lon")
-        if not lat or not lon:
-            return self._empty_result(detail="No coordinates available")
-
-        min_age = config.DECK_PERMIT_AGE_YEARS
-        cutoff_year = date.today().year - min_age
-        radius = config.PERMIT_SEARCH_RADIUS_M
-
-        # Query Socrata for old deck permits with pagination and bbox
-        s, w, n, e = config.CITY_BBOX
-        bbox_filter = (
-            f"latitude >= {s} AND latitude <= {n} AND "
-            f"longitude >= {w} AND longitude <= {e}"
-        )
-        permits = []
-        offset = 0
-        page_size = 1000
         try:
-            while True:
-                params = {
-                    "$where": (
-                        f"approval_date <= '{cutoff_year}-12-31' AND "
-                        f"{bbox_filter} AND "
-                        f"("
-                        f"upper(description) like '%DECK%' OR "
-                        f"upper(description) like '%PATIO%' OR "
-                        f"upper(description) like '%BALCON%' OR "
-                        f"upper(description) like '%PORCH%' OR "
-                        f"upper(description) like '%STAIR%'"
-                        f")"
-                    ),
-                    "$limit": page_size,
-                    "$offset": offset,
-                    "$order": "approval_date ASC",
-                }
-                resp = requests.get(config.SD_OPEN_DATA_PERMITS, params=params, timeout=15)
-                resp.raise_for_status()
-                page = resp.json()
-                permits.extend(page)
-                if len(page) < page_size:
-                    break
-                offset += page_size
-        except Exception as e:
-            return self._empty_result(detail=f"Permit query failed: {e}")
-
-        if not permits:
-            return self._empty_result(detail="No dated deck permits found in area")
-
-        # Find closest deck permit to this property
-        closest_dist = float("inf")
-        closest_permit = None
-        for p in permits:
-            plat = p.get("latitude") or p.get("lat")
-            plon = p.get("longitude") or p.get("lon")
-            if not plat or not plon:
-                continue
-            try:
-                dist = _haversine_m(lat, lon, float(plat), float(plon))
-            except (ValueError, TypeError):
-                continue
-            if dist < closest_dist:
-                closest_dist = dist
-                closest_permit = p
-
-        if closest_dist > radius:
-            return self._empty_result(
-                detail=f"Nearest deck permit is {closest_dist:.0f}m away (>{radius}m radius)"
-            )
-
-        # Calculate permit age and score
-        permit_date = (closest_permit or {}).get("approval_date", "")[:10]
-        try:
-            permit_year = int(permit_date[:4])
-        except (ValueError, IndexError):
-            permit_year = cutoff_year
+            year_built = int(year_built)
+        except (ValueError, TypeError):
+            return self._empty_result(detail="Invalid year-built data")
 
         current_year = date.today().year
-        permit_age = current_year - permit_year
+        age = current_year - year_built
 
-        if permit_age >= 15:
-            score = 1.0
-            detail = f"Deck permit from {permit_year} ({permit_age} yrs) — likely needs full replacement"
-        elif permit_age >= 10:
-            score = 0.7
-            detail = f"Deck permit from {permit_year} ({permit_age} yrs) — significant wear expected"
-        elif permit_age >= 7:
-            score = 0.4
-            detail = f"Deck permit from {permit_year} ({permit_age} yrs) — maintenance due"
-        else:
+        # Homes built with original decks — estimate deck age = home age
+        # This is more reliable than searching for individual permits
+        min_age = config.DECK_PERMIT_AGE_YEARS
+
+        if age < min_age:
             return self._empty_result(
-                detail=f"Deck permit from {permit_year} ({permit_age} yrs) — still relatively new"
+                detail=f"Home is {age} years old — deck likely still in good condition"
             )
 
-        desc = (closest_permit or {}).get("description", "Deck/patio permit")[:80]
+        # Only single-family homes and duplexes typically have private decks
+        # (condos/apartments handled by SB-326 signal)
+        btype = (prop.get("building_type") or "").lower()
+        if btype in ("apartments", "condo", "mobile_home", "vacant_residential"):
+            return self._empty_result(
+                detail=f"{btype.title()} — deck age assessment handled by SB-326 signal"
+            )
+
+        if age >= 20:
+            score = 1.0
+            detail = f"Home built {year_built} ({age} yrs) — original deck likely unsafe, needs replacement"
+        elif age >= 15:
+            score = 0.8
+            detail = f"Home built {year_built} ({age} yrs) — deck showing significant wear"
+        elif age >= min_age:
+            score = 0.5
+            detail = f"Home built {year_built} ({age} yrs) — deck maintenance likely overdue"
+        else:
+            return self._empty_result(detail=f"Home is {age} years old — below threshold")
+
         return {
             "layer":  self.name,
             "label":  self.label,
@@ -138,10 +70,8 @@ class DeckPermitAgeLayer(BaseLayer):
             "score":  score,
             "detail": detail,
             "data":   {
-                "permit_year": permit_year,
-                "permit_age_years": permit_age,
-                "permit_distance_m": round(closest_dist),
-                "permit_description": desc,
+                "year_built": year_built,
+                "estimated_deck_age": age,
             },
             "paid":   self.paid,
         }

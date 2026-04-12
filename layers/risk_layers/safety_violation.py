@@ -1,30 +1,18 @@
 #!/usr/bin/env python3
 """
-Signal 6: Safety Violation
+Signal 6: Safety Violation Risk
 
-Checks city Code Enforcement / Building Safety logs for violations related
-to decks, balconies, stairs, or unsafe structures. Property owners with
-violations need a solution provider to clear city fines.
+Identifies properties at high risk for deck/balcony safety violations
+based on building age, type, and material. Older multi-story wood-frame
+buildings with decks/balconies are the most likely to have safety issues.
+
+Previously queried the SD Code Enforcement Socrata API, but that endpoint
+is no longer available (404). This version uses property characteristics
+as a proxy for violation risk.
 """
 
-import math
-from datetime import date, timedelta
+from datetime import date
 from layers.base import BaseLayer
-import config
-
-try:
-    import requests as req_lib
-except ImportError:
-    req_lib = None
-
-
-def _haversine_m(lat1, lon1, lat2, lon2):
-    R = 6_371_000.0
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return R * 2 * math.asin(math.sqrt(a))
 
 
 class SafetyViolationLayer(BaseLayer):
@@ -33,107 +21,75 @@ class SafetyViolationLayer(BaseLayer):
     paid  = False
 
     def run(self, prop: dict) -> dict:
-        if not req_lib:
-            return self._empty_result(detail="requests library not available")
+        year_built = prop.get("year_built")
+        if not year_built:
+            return self._empty_result(detail="No year-built data — cannot assess violation risk")
 
-        lat = prop.get("lat")
-        lon = prop.get("lon")
-        if not lat or not lon:
-            return self._empty_result(detail="No coordinates available")
-
-        months = config.CODE_ENFORCEMENT_MONTHS
-        cutoff = (date.today() - timedelta(days=months * 30)).isoformat()
-
-        # Query Socrata for code enforcement cases with pagination and bbox
-        s, w, n, e = config.CITY_BBOX
-        bbox_filter = (
-            f"latitude >= {s} AND latitude <= {n} AND "
-            f"longitude >= {w} AND longitude <= {e}"
-        )
-        cases = []
-        offset = 0
-        page_size = 1000
         try:
-            while True:
-                params = {
-                    "$where": (
-                        f"date_case_created >= '{cutoff}' AND "
-                        f"{bbox_filter} AND "
-                        f"("
-                        f"upper(case_type) like '%DECK%' OR "
-                        f"upper(case_type) like '%BALCON%' OR "
-                        f"upper(case_type) like '%STAIR%' OR "
-                        f"upper(case_type) like '%UNSAFE%' OR "
-                        f"upper(case_type) like '%STRUCT%' OR "
-                        f"upper(case_type) like '%HABITAB%' OR "
-                        f"upper(violation_name) like '%DECK%' OR "
-                        f"upper(violation_name) like '%BALCON%' OR "
-                        f"upper(violation_name) like '%STAIR%' OR "
-                        f"upper(violation_name) like '%ROT%'"
-                        f")"
-                    ),
-                    "$limit": page_size,
-                    "$offset": offset,
-                }
-                resp = req_lib.get(
-                    config.SD_OPEN_DATA_CODE_ENFORCEMENT,
-                    params=params,
-                    timeout=15,
-                )
-                resp.raise_for_status()
-                page = resp.json()
-                cases.extend(page)
-                if len(page) < page_size:
-                    break
-                offset += page_size
-        except Exception as e:
-            return self._empty_result(detail=f"Code enforcement query failed: {e}")
+            year_built = int(year_built)
+        except (ValueError, TypeError):
+            return self._empty_result(detail="Invalid year-built data")
 
-        if not cases:
-            return self._empty_result(detail="No relevant code enforcement cases found")
+        current_year = date.today().year
+        age = current_year - year_built
 
-        # Find closest case to this property
-        closest_dist = float("inf")
-        closest_case = None
-        for c in cases:
-            clat = c.get("latitude") or c.get("lat")
-            clon = c.get("longitude") or c.get("lon")
-            if not clat or not clon:
-                continue
-            try:
-                dist = _haversine_m(lat, lon, float(clat), float(clon))
-            except (ValueError, TypeError):
-                continue
-            if dist < closest_dist:
-                closest_dist = dist
-                closest_case = c
+        # Risk factors for deck/balcony safety violations
+        risk_score = 0.0
+        risk_factors = []
 
-        if closest_dist > config.PERMIT_SEARCH_RADIUS_M:
+        # Age is the primary factor — wood rot accelerates after 20 years
+        if age >= 30:
+            risk_score += 0.5
+            risk_factors.append(f"{age} yrs old (high rot risk)")
+        elif age >= 20:
+            risk_score += 0.3
+            risk_factors.append(f"{age} yrs old (moderate rot risk)")
+        elif age >= 15:
+            risk_score += 0.1
+            risk_factors.append(f"{age} yrs old")
+        else:
             return self._empty_result(
-                detail=f"Nearest violation is {closest_dist:.0f}m away — outside search radius"
+                detail=f"Home is {age} years old — low violation risk"
             )
 
-        # Active violations score higher than closed ones
-        status = (closest_case or {}).get("case_status", "").upper()
-        case_type = (closest_case or {}).get("case_type", "") or (closest_case or {}).get("violation_name", "")
+        # Multi-story buildings have elevated decks/balconies — higher safety stakes
+        levels = prop.get("building_levels") or prop.get("building:levels", "")
+        if levels:
+            try:
+                if int(str(levels).strip()) >= 2:
+                    risk_score += 0.2
+                    risk_factors.append("multi-story (elevated deck risk)")
+            except (ValueError, TypeError):
+                pass
 
-        if "OPEN" in status or "ACTIVE" in status:
-            score = 1.0
-            detail = f"Active safety violation — {case_type[:50]}"
-        else:
-            score = 0.7
-            detail = f"Recently closed violation — {case_type[:50]}"
+        # Building type — duplexes and multi-family have shared structures
+        btype = (prop.get("building_type") or "").lower()
+        if btype in ("duplex", "apartments"):
+            risk_score += 0.2
+            risk_factors.append(f"{btype} (shared structural elements)")
 
+        # Wood material confirmed
+        material = (prop.get("material") or "").lower()
+        if "wood" in material or "timber" in material:
+            risk_score += 0.1
+            risk_factors.append("wood construction")
+
+        if risk_score < 0.3:
+            return self._empty_result(
+                detail=f"Low violation risk profile — {', '.join(risk_factors) or 'insufficient risk factors'}"
+            )
+
+        score = self._clamp(risk_score)
         return {
             "layer":  self.name,
             "label":  self.label,
             "signal": True,
             "score":  score,
-            "detail": detail,
+            "detail": f"Elevated violation risk — {', '.join(risk_factors)}",
             "data":   {
-                "violation_distance_m": round(closest_dist),
-                "case_status": status,
-                "case_type": case_type[:80],
+                "risk_score": round(score, 2),
+                "risk_factors": risk_factors,
+                "home_age": age,
             },
             "paid":   self.paid,
         }
