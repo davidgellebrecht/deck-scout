@@ -22,7 +22,7 @@
     "layer_new_owner_lot_sqft": 5200,
     "layer_building_permit_signal": false,
     "layer_building_permit_score": null,
-    "layer_building_permit_detail": "No recent pool/spa permits in area",
+    "layer_building_permit_detail": "No pool on this parcel",
     "layer_deck_permit_age_signal": true,
     "layer_deck_permit_age_score": 0.7,
     "layer_deck_permit_age_detail": "Deck permit from 2008 (18 yrs) \u2014 likely needs full replacement",
@@ -66,7 +66,8 @@
     "layer_flip_activity_detail": "Renovation candidate \u2014 recently purchased, 19 yr old home",
     "layer_hardscape_conversion_signal": false,
     "layer_hardscape_conversion_score": null,
-    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area",
+    "layer_building_permit_has_pool": false
   },
   {
     "lat": 32.5792,
@@ -88,8 +89,7 @@
     "layer_new_owner_detail": "No recent sale date on record",
     "layer_building_permit_signal": false,
     "layer_building_permit_score": null,
-    "layer_building_permit_detail": "Nearest pool/spa permit is 35m away (>30m same-parcel radius)",
-    "layer_building_permit_permit_distance_m": 35,
+    "layer_building_permit_detail": "No pool on this parcel",
     "layer_deck_permit_age_signal": true,
     "layer_deck_permit_age_score": 1.0,
     "layer_deck_permit_age_detail": "Deck permit from 2004 (22 yrs) \u2014 likely needs full replacement",
@@ -129,13 +129,14 @@
     "layer_sb326_compliance_detail": "Not a multi-family building \u2014 SB-326/721 does not apply",
     "layer_neighbor_effect_signal": true,
     "layer_neighbor_effect_score": 0.7,
-    "layer_neighbor_effect_detail": "2 neighbor(s) got deck work recently \u2014 closest 85m away",
+    "layer_neighbor_effect_detail": "2 neighbor(s) recently purchased \u2014 renovation activity likely",
     "layer_flip_activity_signal": false,
     "layer_flip_activity_score": null,
     "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
     "layer_hardscape_conversion_signal": false,
     "layer_hardscape_conversion_score": null,
-    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area",
+    "layer_building_permit_has_pool": false
   },
   {
     "lat": 32.5765,
@@ -160,7 +161,7 @@
     "layer_new_owner_lot_sqft": 6100,
     "layer_building_permit_signal": false,
     "layer_building_permit_score": null,
-    "layer_building_permit_detail": "No recent pool/spa permits in area",
+    "layer_building_permit_detail": "No pool on this parcel",
     "layer_deck_permit_age_signal": true,
     "layer_deck_permit_age_score": 0.7,
     "layer_deck_permit_age_detail": "Deck permit from 2010 (16 yrs) \u2014 likely needs full replacement",
@@ -203,7 +204,8 @@
     "layer_flip_activity_detail": "Renovation candidate \u2014 recently purchased, 17 yr old home",
     "layer_hardscape_conversion_signal": false,
     "layer_hardscape_conversion_score": null,
-    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area",
+    "layer_building_permit_has_pool": false
   },
   {
     "lat": 32.581,
@@ -225,7 +227,7 @@
     "layer_new_owner_detail": "No recent sale date on record",
     "layer_building_permit_signal": false,
     "layer_building_permit_score": null,
-    "layer_building_permit_detail": "No recent pool/spa permits in area",
+    "layer_building_permit_detail": "No pool on this parcel",
     "layer_deck_permit_age_signal": false,
     "layer_deck_permit_age_score": null,
     "layer_deck_permit_age_detail": "No dated deck permits found in area",
@@ -265,7 +267,8 @@
     "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
     "layer_hardscape_conversion_signal": false,
     "layer_hardscape_conversion_score": null,
-    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area",
+    "layer_building_permit_has_pool": false
   },
   {
     "lat": 32.5855,
@@ -286,10 +289,8 @@
     "layer_new_owner_score": null,
     "layer_new_owner_detail": "No recent sale date on record",
     "layer_building_permit_signal": true,
-    "layer_building_permit_score": 1.0,
-    "layer_building_permit_detail": "Pool/spa permit 12m away \u2014 owner in construction mode",
-    "layer_building_permit_permit_distance_m": 12,
-    "layer_building_permit_permit_description": "NEW SPA/HOT TUB INSTALLATION",
+    "layer_building_permit_score": 0.8,
+    "layer_building_permit_detail": "Pool on parcel \u2014 deck/patio surround opportunity",
     "layer_deck_permit_age_signal": true,
     "layer_deck_permit_age_score": 1.0,
     "layer_deck_permit_age_detail": "Deck permit from 2007 (19 yrs) \u2014 likely needs full replacement",
@@ -332,7 +333,9 @@
     "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
     "layer_hardscape_conversion_signal": false,
     "layer_hardscape_conversion_score": null,
-    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area",
+    "layer_building_permit_has_pool": true,
+    "has_pool": true
   },
   {
     "lat": 32.5778,
@@ -357,7 +360,7 @@
     "layer_new_owner_lot_sqft": 4200,
     "layer_building_permit_signal": false,
     "layer_building_permit_score": null,
-    "layer_building_permit_detail": "No recent pool/spa permits in area",
+    "layer_building_permit_detail": "No pool on this parcel",
     "layer_deck_permit_age_signal": true,
     "layer_deck_permit_age_score": 0.7,
     "layer_deck_permit_age_detail": "Deck permit from 2011 (15 yrs) \u2014 likely needs full replacement",
@@ -401,7 +404,8 @@
     "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
     "layer_hardscape_conversion_signal": false,
     "layer_hardscape_conversion_score": null,
-    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area",
+    "layer_building_permit_has_pool": false
   },
   {
     "lat": 32.5825,
@@ -423,7 +427,7 @@
     "layer_new_owner_detail": "No recent sale date on record",
     "layer_building_permit_signal": false,
     "layer_building_permit_score": null,
-    "layer_building_permit_detail": "No recent pool/spa permits in area",
+    "layer_building_permit_detail": "No pool on this parcel",
     "layer_deck_permit_age_signal": false,
     "layer_deck_permit_age_score": null,
     "layer_deck_permit_age_detail": "No dated deck permits found in area",
@@ -464,7 +468,8 @@
     "layer_flip_activity_detail": "No recent sale date \u2014 cannot assess flip activity",
     "layer_hardscape_conversion_signal": false,
     "layer_hardscape_conversion_score": null,
-    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area",
+    "layer_building_permit_has_pool": false
   },
   {
     "lat": 32.5802,
@@ -487,10 +492,9 @@
     "layer_new_owner_sale_date": "2026-03-25",
     "layer_new_owner_days_since_sale": 8,
     "layer_new_owner_lot_sqft": 8500,
-    "layer_building_permit_signal": false,
-    "layer_building_permit_score": null,
-    "layer_building_permit_detail": "Nearest pool/spa permit is 85m away (>30m same-parcel radius)",
-    "layer_building_permit_permit_distance_m": 85,
+    "layer_building_permit_signal": true,
+    "layer_building_permit_score": 1.0,
+    "layer_building_permit_detail": "Pool + recent purchase \u2014 high-intent deck opportunity",
     "layer_deck_permit_age_signal": true,
     "layer_deck_permit_age_score": 1.0,
     "layer_deck_permit_age_detail": "Deck permit from 2006 (20 yrs) \u2014 likely needs full replacement",
@@ -534,6 +538,8 @@
     "layer_flip_activity_detail": "Renovation candidate \u2014 recently purchased, 21 yr old home",
     "layer_hardscape_conversion_signal": false,
     "layer_hardscape_conversion_score": null,
-    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area"
+    "layer_hardscape_conversion_detail": "No recent hardscape/landscaping permits in area",
+    "layer_building_permit_has_pool": true,
+    "has_pool": true
   }
 ]
