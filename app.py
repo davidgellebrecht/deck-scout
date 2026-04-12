@@ -1285,118 +1285,107 @@ else:
                     })
                 st.dataframe(pd.DataFrame(detail_rows), use_container_width=True, hide_index=True)
 
-        # Render cards in rows of 3 (limited in demo mode)
-        row_size = 3
+        # Render property cards — each card gets its own row so the report
+        # always appears directly below the card that was tapped (works on mobile)
         display_properties = properties if PRO_MODE else properties[:DEMO_RESULT_LIMIT]
-        for row_start in range(0, len(display_properties), row_size):
-            row_props = display_properties[row_start:row_start + row_size]
-            cols = st.columns(row_size)
+        for idx, p in enumerate(display_properties):
+            score     = p["opportunity_score"]
+            address   = p.get("address", f"Property #{idx+1}")
+            fired     = signals_fired_list(p)
+            year      = p.get("year_built", "")
+            btype     = (p.get("building_type") or "residential").title()
+            score_clr = score_color(score)
+            is_open   = (active_report == idx)
 
-            for col_idx, (col, p) in enumerate(zip(cols, row_props)):
-                idx       = row_start + col_idx
-                score     = p["opportunity_score"]
-                address   = p.get("address", f"Property #{idx+1}")
-                fired     = signals_fired_list(p)
-                year      = p.get("year_built", "")
-                btype     = (p.get("building_type") or "residential").title()
-                score_clr = score_color(score)
-                is_open   = (active_report == idx)
+            # Card layout: map link on left, intel on right
+            card_left, card_right = st.columns([1, 2])
 
-                with col:
-                    # Map link placeholder
-                    lat = p.get("lat", 32.7)
-                    lon = p.get("lon", -117.1)
-                    maps_url = f"https://www.google.com/maps/@{lat},{lon},18z"
-                    st.markdown(
-                        f'<a href="{maps_url}" target="_blank" style="text-decoration:none;">'
-                        f'<div style="width:100%;height:120px;background:#ECEAE4;margin-bottom:0;'
-                        f'display:flex;flex-direction:column;align-items:center;justify-content:center;'
-                        f'border:1px solid #D6D0C4;border-radius:4px;cursor:pointer;">'
-                        f'<div style="font-size:1.4rem;margin-bottom:0.3rem;">📍</div>'
-                        f'<div style="font-family:Poppins,sans-serif;font-size:0.6rem;font-weight:600;'
-                        f'letter-spacing:0.08em;color:#5A6B7D;margin-bottom:0.2rem;">'
-                        f'{lat:.4f}, {lon:.4f}</div>'
-                        f'<div style="font-family:Poppins,sans-serif;font-size:0.52rem;color:#C0833E;">'
-                        f'View on Google Maps</div>'
-                        f'</div></a>',
-                        unsafe_allow_html=True,
-                    )
-                    tier = p.get("lead_tier", "Cold")
-                    tier_html = lead_tier_badge(tier)
-                    st.markdown(
-                        f'<div style="padding:0.6rem 0 0.4rem;border-bottom:1px solid #D6D0C4;">'
-                        f'{tier_html}'
-                        f'<div style="font-family:Poppins,sans-serif;font-size:0.56rem;font-weight:700;'
-                        f'letter-spacing:0.14em;text-transform:uppercase;color:{score_clr};margin:0.3rem 0 0.15rem;">'
-                        f'Score {score:.0f}% ({p.get("signals_fired",0)} of {p.get("signals_total", n_active)})</div>'
-                        f'<div style="font-family:Poppins,sans-serif;font-weight:600;font-size:0.9rem;'
-                        f'color:#1B2A4A;line-height:1.25;">{address[:55]}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                    # Key Intel table — expanded with all available fields
-                    year_str = str(year) if year else "—"
-                    lot_str = f"{p.get('lot_sqft'):,} sqft" if p.get("lot_sqft") else "—"
-                    val_str = f"${p.get('assessed_value'):,}" if p.get("assessed_value") else "—"
-                    bed_bath = ""
-                    beds = str(p.get("bedrooms", "")).strip().lstrip("0")
-                    baths_val = str(p.get("baths", "")).strip().lstrip("0")
-                    if beds or baths_val:
-                        bed_bath = f"{beds or '—'} bed / {baths_val or '—'} bath"
-                    else:
-                        bed_bath = "—"
-                    pool_str = "Yes" if p.get("has_pool") else "No"
+            with card_left:
+                lat = p.get("lat", 32.7)
+                lon = p.get("lon", -117.1)
+                maps_url = f"https://www.google.com/maps/@{lat},{lon},18z"
+                st.markdown(
+                    f'<a href="{maps_url}" target="_blank" style="text-decoration:none;">'
+                    f'<div style="width:100%;height:160px;background:#ECEAE4;'
+                    f'display:flex;flex-direction:column;align-items:center;justify-content:center;'
+                    f'border:1px solid #D6D0C4;border-radius:4px;cursor:pointer;">'
+                    f'<div style="font-size:1.4rem;margin-bottom:0.3rem;">📍</div>'
+                    f'<div style="font-family:Poppins,sans-serif;font-size:0.6rem;font-weight:600;'
+                    f'letter-spacing:0.08em;color:#5A6B7D;margin-bottom:0.2rem;">'
+                    f'{lat:.4f}, {lon:.4f}</div>'
+                    f'<div style="font-family:Poppins,sans-serif;font-size:0.52rem;color:#C0833E;">'
+                    f'View on Google Maps</div>'
+                    f'</div></a>',
+                    unsafe_allow_html=True,
+                )
 
-                    # Deck size estimate
-                    deck_lo, deck_hi, val_lo, val_hi = estimate_deck_size(p)
-                    if deck_lo and deck_hi:
-                        deck_str = f"{deck_lo:,}-{deck_hi:,} sqft"
-                        proj_str = f"${val_lo:,}-${val_hi:,}"
-                    else:
-                        deck_str = "—"
-                        proj_str = "—"
+            with card_right:
+                tier = p.get("lead_tier", "Cold")
+                tier_html = lead_tier_badge(tier)
+                st.markdown(
+                    f'<div style="padding:0.2rem 0 0.3rem;">'
+                    f'{tier_html}'
+                    f'<div style="font-family:Poppins,sans-serif;font-size:0.56rem;font-weight:700;'
+                    f'letter-spacing:0.14em;text-transform:uppercase;color:{score_clr};margin:0.3rem 0 0.1rem;">'
+                    f'Score {score:.0f}% ({p.get("signals_fired",0)} of {p.get("signals_total", n_active)})</div>'
+                    f'<div style="font-family:Poppins,sans-serif;font-weight:600;font-size:0.9rem;'
+                    f'color:#1B2A4A;line-height:1.25;">{address[:55]}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                # Key Intel — compact table
+                year_str = str(year) if year else "—"
+                lot_str = f"{p.get('lot_sqft'):,}" if p.get("lot_sqft") else "—"
+                val_str = f"${p.get('assessed_value'):,}" if p.get("assessed_value") else "—"
+                beds = str(p.get("bedrooms", "")).strip().lstrip("0") or "—"
+                baths_val = str(p.get("baths", "")).strip().lstrip("0") or "—"
+                pool_str = "Yes" if p.get("has_pool") else "No"
+                deck_lo, deck_hi, val_lo, val_hi = estimate_deck_size(p)
+                deck_str = f"{deck_lo:,}-{deck_hi:,} sqft" if deck_lo else "—"
+                proj_str = f"${val_lo:,}-${val_hi:,}" if val_lo else "—"
 
-                    td_l = 'style="padding:2px 4px;color:#7A8A9D;"'
-                    td_r = 'style="padding:2px 0;text-align:right;font-weight:500;"'
-                    st.markdown(
-                        f'<div style="padding:0.5rem 0;border-bottom:1px solid #D6D0C4;">'
-                        f'<div style="font-family:Poppins,sans-serif;font-size:0.52rem;font-weight:700;'
-                        f'letter-spacing:0.16em;text-transform:uppercase;color:#C0833E;margin-bottom:0.3rem;">Key Intel</div>'
-                        f'<table style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif;'
-                        f'font-size:0.72rem;color:#1B2A4A;">'
-                        f'<tr><td {td_l}>Year Built</td><td {td_r}>{year_str}</td></tr>'
-                        f'<tr><td {td_l}>Lot Size</td><td {td_r}>{lot_str}</td></tr>'
-                        f'<tr><td {td_l}>Assessed</td><td {td_r}>{val_str}</td></tr>'
-                        f'<tr><td {td_l}>Bed / Bath</td><td {td_r}>{bed_bath}</td></tr>'
-                        f'<tr><td {td_l}>Pool</td><td {td_r}>{pool_str}</td></tr>'
-                        f'<tr><td {td_l}>Est. Deck</td><td {td_r}>{deck_str}</td></tr>'
-                        f'<tr><td {td_l}>Project Value</td><td {td_r}>{proj_str}</td></tr>'
-                        f'</table></div>',
-                        unsafe_allow_html=True,
-                    )
-                    if fired:
-                        chips = "".join(
-                            f'<span style="display:inline-block;background:#E8F5E9;color:#1B5E20;'
-                            f'border:1px solid #2E7D32;font-family:Poppins,sans-serif;'
-                            f'font-size:0.58rem;padding:2px 6px;margin:2px 2px 0 0;'
-                            f'border-radius:3px;">{sig}</span>'
-                            for sig in fired
-                        )
-                        st.markdown(f'<div style="padding:0.4rem 0 0.5rem;">{chips}</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(
-                            '<div style="padding:0.4rem 0 0.5rem;font-family:Poppins,sans-serif;'
-                            'font-size:0.7rem;color:#7A8A9D;font-style:italic;">No signals fired</div>',
-                            unsafe_allow_html=True,
-                        )
-                    btn_label = "Close Report" if is_open else "View Report"
-                    if st.button(btn_label, key=f"report_btn_{idx}", use_container_width=True):
-                        st.session_state.active_report = None if is_open else idx
-                        st.rerun()
+                td_l = 'style="padding:1px 4px;color:#7A8A9D;font-size:0.68rem;"'
+                td_r = 'style="padding:1px 0;text-align:right;font-weight:500;font-size:0.68rem;"'
+                st.markdown(
+                    f'<table style="width:100%;border-collapse:collapse;font-family:Poppins,sans-serif;color:#1B2A4A;">'
+                    f'<tr><td {td_l}>Year</td><td {td_r}>{year_str}</td>'
+                    f'<td {td_l}>Lot</td><td {td_r}>{lot_str}</td></tr>'
+                    f'<tr><td {td_l}>Value</td><td {td_r}>{val_str}</td>'
+                    f'<td {td_l}>Bed/Bath</td><td {td_r}>{beds}/{baths_val}</td></tr>'
+                    f'<tr><td {td_l}>Pool</td><td {td_r}>{pool_str}</td>'
+                    f'<td {td_l}>Est. Deck</td><td {td_r}>{deck_str}</td></tr>'
+                    f'<tr><td {td_l}>Proj $</td><td {td_r}>{proj_str}</td>'
+                    f'<td {td_l}></td><td {td_r}></td></tr>'
+                    f'</table>',
+                    unsafe_allow_html=True,
+                )
 
-            # After each row: inject report if this row contains the active card
-            if active_report is not None and row_start <= active_report < row_start + row_size:
-                render_report(active_report, properties[active_report])
+            # Signal chips + button in full width below the card
+            if fired:
+                chips = "".join(
+                    f'<span style="display:inline-block;background:#E8F5E9;color:#1B5E20;'
+                    f'border:1px solid #2E7D32;font-family:Poppins,sans-serif;'
+                    f'font-size:0.58rem;padding:2px 6px;margin:2px 2px 0 0;'
+                    f'border-radius:3px;">{sig}</span>'
+                    for sig in fired
+                )
+                st.markdown(f'<div style="padding:0.2rem 0 0.3rem;">{chips}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(
+                    '<div style="padding:0.2rem 0 0.3rem;font-family:Poppins,sans-serif;'
+                    'font-size:0.7rem;color:#7A8A9D;font-style:italic;">No signals fired</div>',
+                    unsafe_allow_html=True,
+                )
+            btn_label = "Close Report" if is_open else "View Report"
+            if st.button(btn_label, key=f"report_btn_{idx}", use_container_width=True):
+                st.session_state.active_report = None if is_open else idx
+                st.rerun()
+
+            # Report appears DIRECTLY below this card — works on mobile
+            if is_open:
+                render_report(idx, p)
+
+            st.markdown("---")
 
         # Show upgrade CTA if results were truncated
         if not PRO_MODE and len(properties) > DEMO_RESULT_LIMIT:
